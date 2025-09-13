@@ -2,41 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Premium Finance App Design System */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Core Colors - Finance Aesthetic */
+    --background: 220 25% 6%;
+    --foreground: 220 20% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 25% 8%;
+    --card-foreground: 220 20% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 25% 8%;
+    --popover-foreground: 220 20% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Finance Primary - Deep Blue */
+    --primary: 220 91% 45%;
+    --primary-foreground: 220 20% 98%;
+    --primary-glow: 220 91% 55%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Finance Secondary - Emerald Growth */
+    --secondary: 150 80% 45%;
+    --secondary-foreground: 220 25% 8%;
+    --secondary-glow: 150 80% 55%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Premium Gold Accent */
+    --accent: 45 90% 60%;
+    --accent-foreground: 220 25% 8%;
+    --accent-glow: 45 90% 70%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Muted Tones */
+    --muted: 220 20% 15%;
+    --muted-foreground: 220 15% 70%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Status Colors */
+    --success: 150 80% 45%;
+    --success-foreground: 220 20% 98%;
+    --warning: 45 90% 60%;
+    --warning-foreground: 220 25% 8%;
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 220 20% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Interface Elements */
+    --border: 220 20% 20%;
+    --input: 220 20% 15%;
+    --ring: 220 91% 45%;
 
-    --radius: 0.5rem;
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(220 91% 45%), hsl(220 91% 55%));
+    --gradient-secondary: linear-gradient(135deg, hsl(150 80% 45%), hsl(150 80% 55%));
+    --gradient-accent: linear-gradient(135deg, hsl(45 90% 60%), hsl(45 90% 70%));
+    --gradient-hero: linear-gradient(135deg, hsl(220 25% 6%), hsl(220 30% 12%));
+    --gradient-card: linear-gradient(135deg, hsl(220 25% 8%), hsl(220 30% 10%));
+
+    /* Shadows */
+    --shadow-primary: 0 10px 30px -10px hsl(220 91% 45% / 0.3);
+    --shadow-secondary: 0 10px 30px -10px hsl(150 80% 45% / 0.3);
+    --shadow-accent: 0 10px 30px -10px hsl(45 90% 60% / 0.3);
+    --shadow-elegant: 0 20px 60px -10px hsl(220 25% 6% / 0.4);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -100,6 +129,99 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    background: var(--gradient-hero);
+  }
+}
+
+@layer components {
+  /* Hero Button Variants */
+  .btn-hero {
+    @apply bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-semibold px-8 py-4 rounded-2xl;
+    @apply shadow-[var(--shadow-primary)] hover:shadow-[var(--shadow-elegant)];
+    @apply transition-all duration-300 hover:scale-105 hover:brightness-110;
+  }
+
+  .btn-secondary {
+    @apply bg-gradient-to-r from-secondary to-secondary-glow text-secondary-foreground font-semibold px-8 py-4 rounded-2xl;
+    @apply shadow-[var(--shadow-secondary)] hover:shadow-[var(--shadow-elegant)];
+    @apply transition-all duration-300 hover:scale-105;
+  }
+
+  .btn-accent {
+    @apply bg-gradient-to-r from-accent to-accent-glow text-accent-foreground font-semibold px-6 py-3 rounded-xl;
+    @apply shadow-[var(--shadow-accent)] hover:shadow-[var(--shadow-elegant)];
+    @apply transition-all duration-300 hover:scale-105;
+  }
+
+  /* Card Variants */
+  .card-premium {
+    @apply bg-gradient-to-br from-card to-[hsl(220_30%_10%)] border border-border/50;
+    @apply backdrop-blur-sm shadow-[var(--shadow-elegant)] rounded-2xl p-6;
+    @apply transition-all duration-300 hover:shadow-[var(--shadow-primary)];
+  }
+
+  .card-glow {
+    @apply relative overflow-hidden;
+  }
+
+  .card-glow::before {
+    @apply content-[''] absolute inset-0 rounded-2xl p-[1px];
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)), hsl(var(--accent)));
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: xor;
+  }
+
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out forwards;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  /* Gradients */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent;
+  }
+
+  .gradient-border {
+    @apply border border-transparent bg-gradient-to-r from-primary via-secondary to-accent bg-clip-border;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow {
+  from {
+    filter: brightness(1) saturate(1);
+  }
+  to {
+    filter: brightness(1.2) saturate(1.3);
   }
 }

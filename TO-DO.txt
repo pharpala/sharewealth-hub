@@ -4,3 +4,4 @@ Databricks service, dashboard and every analytic possible taken from martian inf
 Agentic AI in ivestments
 Investments workflow
 Dashboard manipualation
+Shareable cards that user gets to see with insults on their spending habits graphite 

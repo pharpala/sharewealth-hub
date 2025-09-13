@@ -61,7 +61,7 @@ const Dashboard = () => {
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="card-premium animate-slide-up">
+          <Card className="card-cyber hover-lift">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Total Spent</p>
@@ -77,7 +77,7 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <Card className="card-premium animate-slide-up">
+          <Card className="card-cyber hover-lift">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Monthly Budget</p>
@@ -93,7 +93,7 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <Card className="card-premium animate-slide-up">
+          <Card className="card-cyber hover-lift">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Savings Rate</p>
@@ -109,7 +109,7 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <Card className="card-premium animate-slide-up">
+          <Card className="card-cyber hover-lift">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Credit Score</p>
@@ -129,9 +129,9 @@ const Dashboard = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Spending Breakdown */}
           <div className="lg:col-span-2">
-            <Card className="card-premium">
+            <Card className="card-cyber">
               <div className="mb-6">
-                <h3 className="text-2xl font-semibold mb-2">Spending Breakdown</h3>
+                <h3 className="text-2xl font-semibold mb-2 text-neon">Spending Breakdown</h3>
                 <p className="text-muted-foreground">Category-wise analysis for this month</p>
               </div>
 
@@ -168,9 +168,9 @@ const Dashboard = () => {
 
           {/* AI Insights */}
           <div>
-            <Card className="card-premium">
+            <Card className="card-cyber">
               <div className="mb-6">
-                <h3 className="text-2xl font-semibold mb-2">AI Insights</h3>
+                <h3 className="text-2xl font-semibold mb-2 text-electric">AI Insights</h3>
                 <p className="text-muted-foreground">Personalized recommendations</p>
               </div>
 
@@ -195,7 +195,7 @@ const Dashboard = () => {
                 })}
               </div>
 
-              <Button variant="accent" className="w-full mt-6">
+              <Button variant="electric" className="w-full mt-6">
                 Get More Insights
               </Button>
             </Card>

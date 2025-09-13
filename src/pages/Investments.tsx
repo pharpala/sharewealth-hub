@@ -100,10 +100,10 @@ const Investments = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Configuration Panel */}
+            {/* Configuration Panel */}
           <div className="lg:col-span-1 space-y-6">
             {/* Goal Selection */}
-            <Card className="card-premium">
+            <Card className="card-cyber">
               <h3 className="text-xl font-semibold mb-4">Investment Goal</h3>
               <div className="space-y-3">
                 {goalOptions.map((option) => {
@@ -132,8 +132,8 @@ const Investments = () => {
             </Card>
 
             {/* Timeframe Selection */}
-            <Card className="card-premium">
-              <h3 className="text-xl font-semibold mb-4">Time Horizon</h3>
+            <Card className="card-cyber">
+              <h3 className="text-xl font-semibold mb-4 text-electric">Time Horizon</h3>
               <div className="space-y-3">
                 {timeframeOptions.map((option) => (
                   <button
@@ -158,8 +158,8 @@ const Investments = () => {
             </Card>
 
             {/* Risk Tolerance */}
-            <Card className="card-premium">
-              <h3 className="text-xl font-semibold mb-4">Risk Tolerance</h3>
+            <Card className="card-cyber">
+              <h3 className="text-xl font-semibold mb-4 text-cyber">Risk Tolerance</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Conservative</span>
@@ -223,7 +223,7 @@ const Investments = () => {
                   placeholder="Ask about investment strategies..."
                   className="flex-1 px-4 py-3 bg-input border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-                <Button onClick={handleSendMessage} variant="hero" size="icon">
+                <Button onClick={handleSendMessage} variant="cyber" size="icon">
                   <Send className="w-4 h-4" />
                 </Button>
               </div>

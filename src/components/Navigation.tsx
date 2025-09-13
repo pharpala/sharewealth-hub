@@ -50,7 +50,7 @@ const Navigation = () => {
 
           {/* CTA Button */}
           <div className="hidden md:block">
-            <Button variant="hero" className="flex items-center space-x-2">
+            <Button variant="cyber" className="flex items-center space-x-2">
               <Upload className="w-4 h-4" />
               <span>Upload Statement</span>
             </Button>
@@ -90,7 +90,7 @@ const Navigation = () => {
                   </Link>
                 );
               })}
-              <Button variant="hero" className="w-full flex items-center justify-center space-x-2">
+              <Button variant="cyber" className="w-full flex items-center justify-center space-x-2">
                 <Upload className="w-4 h-4" />
                 <span>Upload Statement</span>
               </Button>

@@ -251,8 +251,8 @@ const Trends = () => {
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button variant="hero">Share Your Journey</Button>
-                <Button variant="secondary">Explore Community</Button>
+                <Button variant="cyber">Share Your Journey</Button>
+                <Button variant="neon">Explore Community</Button>
               </div>
             </div>
           </Card>

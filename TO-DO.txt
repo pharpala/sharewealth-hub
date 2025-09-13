@@ -1,0 +1,6 @@
+martian router to clean PDFs (Kedan)
+Frontend (Pranay)
+Databricks service, dashboard and every analytic possible taken from martian info (Sehaj)
+Agentic AI in ivestments
+Investments workflow
+Dashboard manipualation

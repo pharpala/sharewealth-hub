@@ -64,5 +64,3 @@ next-env.d.ts
 # Security & secrets
 *.key
 secrets.yaml
-secrets.json
-secrets.jason

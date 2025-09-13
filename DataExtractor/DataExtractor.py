@@ -18,5 +18,5 @@ def extract_data(pdf):
         model="openai/gpt-4.1-nano:cheap",
         messages=messages
     )
-    return response
+    return response, text
     

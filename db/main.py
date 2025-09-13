@@ -14,6 +14,14 @@ engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
+def init_db():
+    from sqlalchemy import text
+    Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE statements ADD COLUMN IF NOT EXISTS text_extracted TEXT"))
+        conn.execute(text("ALTER TABLE statements ADD COLUMN IF NOT EXISTS enriched_data JSON"))
+        conn.commit()
+
 # -----------------------------
 # Table Definitions (ORM Models)
 # -----------------------------
@@ -37,6 +45,8 @@ class Statement(Base):
     filename = Column(String)
     status = Column(String, default="queued")  # queued|processing|done|error
     uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
+    text_extracted = Column(String)
+    enriched_data = Column(JSON)
 
     user = relationship("User", back_populates="statements")
     transactions = relationship("Transaction", back_populates="statement")
@@ -95,8 +105,14 @@ class StatementRepository:
     def __init__(self, db: Database):
         self.db = db.session
 
-    def create(self, user_id: str, filename: str):
-        stmt = Statement(user_id=user_id, filename=filename, status="queued")
+    def create(self, user_id: str, uploaded_at, text_extracted: str, enriched_data: dict):
+        stmt = Statement(
+            user_id=user_id,
+            status="queued",
+            uploaded_at=uploaded_at,
+            text_extracted=text_extracted,
+            enriched_data=enriched_data
+        )
         self.db.add(stmt)
         self.db.commit()
         return stmt
@@ -106,6 +122,17 @@ class StatementRepository:
 
     def get(self, stmt_id: str):
         return self.db.query(Statement).filter(Statement.id == stmt_id).first()
+
+    def get_by_id(self, user_id: str, statement_id: str):
+        return (
+            self.db.query(Statement)
+            .filter(Statement.id == statement_id, Statement.user_id == user_id)
+            .first()
+        )
+
+
+    def list(self):
+        return self.db.query(Statement).all()
 
 
 class TransactionRepository:

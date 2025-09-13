@@ -5,6 +5,7 @@ Agentic AI in ivestments
 Investments workflow
 Dashboard manipualation
 Share insults/insights in a funny accountable way. "You spent $600 on uber. Maybe go for a walk next time, you need it."
+Shareable cards that user gets to see with insults on their spending habits graphite 
 
 
 ADD INSULTS, THIS IS A MARKETING STRATEGY
@@ -24,4 +25,3 @@ in 5 years.
 These are some houses in your area you could buy for the amount you saved:
 << AI Agent finds houses >>
 "
-

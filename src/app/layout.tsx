@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ShareWealth Hub - Social Finance Platform",
-  description: "A comprehensive social finance platform featuring investment tracking, market trends analysis, and financial insights built with Next.js.",
+  title: "Social Finance",
+  description: "hack the north",
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

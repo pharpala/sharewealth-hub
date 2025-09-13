@@ -45,3 +45,6 @@ next-env.d.ts
 /env
 secrets.yaml
 secrets.jason
+
+# test files
+data/test2.pdf

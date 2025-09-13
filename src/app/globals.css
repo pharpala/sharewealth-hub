@@ -324,6 +324,13 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+.gradient-text-electric {
+  background: linear-gradient(to right, hsl(var(--electric)), hsl(var(--primary)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 /* Animations */
 .animate-float {
   animation: float 6s ease-in-out infinite;

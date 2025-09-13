@@ -19,7 +19,8 @@ import {
   Eye,
   BarChart3,
   ArrowRight,
-  Play
+  Play,
+  Space
 } from "lucide-react";
 import cyberHero from "@/assets/cyber-hero.jpg";
 
@@ -74,10 +75,9 @@ const HeroSection = () => {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Announcement Banner */}
         <div className="pt-12 pb-8 text-center animate-fade-in">
-          <Badge className="bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 px-4 py-2 text-sm font-medium">
+          <Badge className="bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 px-5 py-2 text-sm font-medium">
             <Sparkles className="w-4 h-4 mr-2" />
-            Now with Advanced AI Analytics
-            <ArrowRight className="w-4 h-4 ml-2" />
+              No bulls**t, just numbers and a plan.
           </Badge>
         </div>
 
@@ -88,9 +88,10 @@ const HeroSection = () => {
               Finance Gets
               <span className="text-cyber block animate-glow-pulse">Superhuman</span>
             </h1>
-            <p className="text-xl md:text-2xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
-              Upload your credit statement and unlock AI-powered insights that reveal hidden patterns, 
-              optimize spending, and accelerate wealth building. Join thousands making smarter financial decisions.
+            <p className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
+            Upload one monthly statement. See insights you never imagined, budgets that actually fit 
+            your life, and a roadmap that shows what’s possible, whether it's cutting hidden drains or visualizing the house you could buy if you stick to the plan. 
+            No filler, just cold hard finance.            
             </p>
           </div>
 
@@ -102,7 +103,7 @@ const HeroSection = () => {
                   <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-secondary border-2 border-background"></div>
                 ))}
               </div>
-              <span>12,450+ active users</span>
+              <span>230+ statements analyzed</span>
             </div>
             <div className="flex items-center space-x-1">
               {[1,2,3,4,5].map((i) => (
@@ -128,9 +129,9 @@ const HeroSection = () => {
                 Watch Demo
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Free analysis • No credit card required • 30-second setup
-            </p>
+              <p className="text-sm text-muted-foreground">
+                SOC 2 Certified  •   5-second setup   •   Data never used in training.
+              </p>
           </div>
         </div>
 

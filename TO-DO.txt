@@ -4,3 +4,24 @@ Databricks service, dashboard and every analytic possible taken from martian inf
 Agentic AI in ivestments
 Investments workflow
 Dashboard manipualation
+Share insults/insights in a funny accountable way. "You spent $600 on uber. Maybe go for a walk next time, you need it."
+
+
+ADD INSULTS, THIS IS A MARKETING STRATEGY
+Dashboard:
+Dashboard is every single analytics tool, from piecharts with categories and AI insights
+when hovering to bar charts and timelines. It will include the current months statement,
+and all time. Dahsboard analytics WILL have insults.
+
+Investment:
+Investment is basically budget planning, it will allow user to choose a prompt
+or make his own, from here they will be presented with the same insights as dashboard
+but with numbers so they can see their spend on a long term, this will translate as:
+" If you save $100 on delivery services and clothes, with your additional current savings,
+and are risk favorable (invest in stocks, if not savings accounts) you could put a down payment of 150k 
+in 5 years. 
+
+These are some houses in your area you could buy for the amount you saved:
+<< AI Agent finds houses >>
+"
+

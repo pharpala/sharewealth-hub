@@ -1,5 +1,5 @@
 from DataExtractor.pdfReader import extract_pdf_text
-from martianAPIWrapper import MartianClient
+from DataExtractor.martianAPIWrapper import MartianClient
 from dotenv import load_dotenv
 import os
 

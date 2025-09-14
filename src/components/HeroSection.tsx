@@ -4,13 +4,14 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Upload,
-  TrendingUp,
-  PieChart,
-  Target,
-  Sparkles,
-  Shield,
+import { useToast } from "@/hooks/use-toast";
+import { 
+  Upload, 
+  TrendingUp, 
+  PieChart, 
+  Target, 
+  Sparkles, 
+  Shield, 
   Users,
   Star,
   CheckCircle,
@@ -20,6 +21,8 @@ import {
   BarChart3,
   ArrowRight,
   Play,
+  Space,
+  Loader2
 } from "lucide-react";
 import cyberHero from "@/assets/cyber-hero.jpg";
 
@@ -146,6 +149,193 @@ const HeroSection = () => {
     setIsDragOver(false);
   };
 
+  const uploadFile = async (file: File) => {
+    if (!file) return;
+
+    // Validate file type
+    if (file.type !== "application/pdf") {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a PDF file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload a file smaller than 10MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+
+    // Show initial upload toast
+    toast({
+      title: "🔄 Processing Upload...",
+      description: `Uploading ${file.name} and analyzing with AI. This may take a few moments.`,
+      duration: 3000,
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // For now, we'll use a mock token. In production, this should come from Auth0
+      const mockToken = "mock-jwt-token";
+
+      const response = await fetch("/api/v1/statements/upload", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${mockToken}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Fetch the full statement details from the database
+      const detailsResponse = await fetch(`/api/v1/statements/${result.statement_id}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${mockToken}`,
+        },
+      });
+
+      let fullStatementData = null;
+      if (detailsResponse.ok) {
+        fullStatementData = await detailsResponse.json();
+      }
+
+      toast({
+        title: "✅ Upload Successful!",
+        description: (
+          <div className="space-y-3 max-w-lg">
+            <div className="grid grid-cols-1 gap-2 text-sm">
+              <div><strong>Statement ID:</strong> <code className="text-xs bg-gray-200 px-1 rounded">{result.statement_id}</code></div>
+              <div><strong>Status:</strong> <span className="text-green-600">{result.status}</span></div>
+              <div><strong>Uploaded:</strong> {new Date(result.datetime_uploaded).toLocaleString()}</div>
+              {result.summary && <div><strong>Summary:</strong> {result.summary}</div>}
+            </div>
+            
+            <div className="pt-2 border-t">
+              <a 
+                href={`/statement/${result.statement_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              >
+                📊 View Full Analysis
+              </a>
+            </div>
+            
+            {fullStatementData && (
+              <div className="border-t pt-3 mt-3">
+                <h4 className="font-semibold text-sm mb-2">📊 AI Analysis Results:</h4>
+                <div className="text-xs space-y-2">
+                  {fullStatementData.enriched_data?.choices?.[0]?.message?.content && (() => {
+                    try {
+                      const aiData = JSON.parse(fullStatementData.enriched_data.choices[0].message.content);
+                      return (
+                        <div className="space-y-2">
+                          {aiData.customer_info && (
+                            <div className="bg-blue-50 p-2 rounded">
+                              <strong>👤 Customer:</strong> {aiData.customer_info.name}
+                              {aiData.customer_info.address && <div className="text-gray-600">{aiData.customer_info.address}</div>}
+                            </div>
+                          )}
+                          
+                          {aiData.totals && (
+                            <div className="bg-green-50 p-2 rounded">
+                              <strong>💰 Financial Summary:</strong>
+                              <div className="grid grid-cols-2 gap-1 mt-1">
+                                <div>Balance: ${aiData.totals.ending_balance}</div>
+                                <div>Min Payment: ${aiData.totals.minimum_payment}</div>
+                                <div>Purchases: ${aiData.totals.purchases}</div>
+                                <div>Interest: ${aiData.totals.interest_charges}</div>
+                              </div>
+                              {aiData.totals.payment_due_date && (
+                                <div className="mt-1 text-red-600">Due: {aiData.totals.payment_due_date}</div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {aiData.transactions && aiData.transactions.length > 0 && (
+                            <div className="bg-yellow-50 p-2 rounded">
+                              <strong>📝 Transactions ({aiData.transactions.length}):</strong>
+                              <div className="mt-1 max-h-16 overflow-auto">
+                                {aiData.transactions.slice(0, 3).map((tx: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between">
+                                    <span>{tx.description}</span>
+                                    <span>${tx.amount}</span>
+                                  </div>
+                                ))}
+                                {aiData.transactions.length > 3 && <div className="text-gray-500">...and {aiData.transactions.length - 3} more</div>}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } catch (e) {
+                      return (
+                        <div className="bg-red-50 p-2 rounded text-red-700">
+                          <strong>⚠️ AI Data Parse Error:</strong> {e instanceof Error ? e.message : 'Unknown error'}
+                        </div>
+                      );
+                    }
+                  })()}
+                  
+                  {fullStatementData.text_extracted && (
+                    <div>
+                      <strong>📄 Extracted Text Preview:</strong>
+                      <div className="mt-1 text-xs bg-gray-50 p-2 rounded max-h-16 overflow-auto">
+                        {fullStatementData.text_extracted.substring(0, 200)}
+                        {fullStatementData.text_extracted.length > 200 && "..."}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-800">
+                📄 View Full Database Response
+              </summary>
+              <pre className="mt-2 text-xs bg-gray-900 text-green-400 p-3 rounded-md overflow-auto max-h-40 font-mono">
+                {JSON.stringify(fullStatementData || result, null, 2)}
+              </pre>
+            </details>
+          </div>
+        ),
+        duration: 15000, // Show for 15 seconds
+      });
+
+      // Also log to console for debugging
+      console.log("Upload result:", result);
+      console.log("Full statement data:", fullStatementData);
+      
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -257,7 +447,6 @@ const HeroSection = () => {
             )}
           </div>
         </div>
-
         {/* Interactive Upload Zone */}
         <div className="max-w-3xl mx-auto mb-16 animate-slide-up">
           <div className="card-neon">
@@ -324,6 +513,7 @@ const HeroSection = () => {
                 >
                   <Upload className="w-5 h-5 mr-2" />
                   {uploading ? "Uploading…" : "Get Started Free"}
+
                 </Button>
               </div>
             </div>

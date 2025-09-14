@@ -50,7 +50,7 @@ class ZillowAPI:
                 filtered.append(home)
 
         # 📏 Sort by square footage (descending) & keep top 5
-        filtered = sorted(filtered, key=lambda x: x.get("livingArea") or 0, reverse=True)[:5]
+        filtered = sorted(filtered, key=lambda x: x.get("livingArea") or 0, reverse=True)[:3]
 
         return filtered
 

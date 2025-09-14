@@ -60,6 +60,18 @@ app = FastAPI()
 
 MAX_BYTES = 2 * 1024 * 1024  # 2 MB demo cap
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Initialize RBC API with the provided credentials
 RBC_TEAM_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZWFtSWQiOiJlYTA2Y2IzOC1jZWZjLTQzZTItYjJmNi0wNTYxOWU2ODAyODYiLCJ0ZWFtX25hbWUiOiJNb25leS1UYWxrcyIsImNvbnRhY3RfZW1haWwiOiJrYWRlbkBpY2xvdWQuY29tIiwiZXhwIjoxNzU4NjY4NzY4Ljk1MTkwN30.Ot6upgi_hDXUCBtUqjsGRYseKlDmJYQijDR8Lak6Cyo"
 RBC_TEAM_ID = "ea06cb38-cefc-43e2-b2f6-05619e680286"
@@ -76,38 +88,6 @@ def ensure_rbc_authenticated():
     else:
         print("RBC API credentials not available")
         return False
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-@app.post("/api/v1/test-upload")
-async def test_upload(file: UploadFile = File(...)):
-    return {
-        "filename": file.filename,
-        "content_type": file.content_type,
-        "size": file.size,
-        "status": "success"
-    }
-
-# Conditional endpoint - only available if auth is available
-if AUTH_AVAILABLE:
-    @app.get("/api/v1/me")
-    def get_me(user=Depends(auth_required)):
-        return {"id": user["sub"], "email": user.get("email")}
-
 
 def _strip_code_fences(s: str) -> str:
     s = s.strip()
@@ -141,6 +121,25 @@ def parse_model_json(res) -> dict:
     content = _strip_code_fences(str(content))
     # Now parse to Python dict
     return json.loads(content)
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
+
+@app.post("/api/v1/test-upload")
+async def test_upload(file: UploadFile = File(...)):
+    return {
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": file.size,
+        "status": "success"
+    }
+
+# Conditional endpoint - only available if auth is available
+if AUTH_AVAILABLE:
+    @app.get("/api/v1/me")
+    def get_me(user=Depends(auth_required)):
+        return {"id": user["sub"], "email": user.get("email")}
 
 # Main upload endpoint (from main branch) - works without auth
 @app.post("/upload")
@@ -259,7 +258,6 @@ if AUTH_AVAILABLE and DB_AVAILABLE:
             "text_extracted": statement.text_extracted,
             "enriched_data": statement.enriched_data
         }
-
 
 @app.post("/api/v1/house-analysis")
 async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
@@ -442,7 +440,6 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
     except Exception as e:
         print(f"Investment analysis error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
-
 
 # Apply auth_required decorator if available
 if AUTH_AVAILABLE:

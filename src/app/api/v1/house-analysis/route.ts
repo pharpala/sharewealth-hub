@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE || process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
   try {
+    // Get the authorization header
+    const authorization = request.headers.get('authorization');
+    
+    // Get the request body
     const body = await request.json();
     
     // Validate required fields
@@ -15,11 +19,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Forward request to FastAPI backend
+    // Forward request to FastAPI backend with validated data
     const response = await fetch(`${BACKEND_URL}/api/v1/house-analysis`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authorization && { 'Authorization': authorization }),
       },
       body: JSON.stringify({
         monthly_income: parseFloat(monthly_income),

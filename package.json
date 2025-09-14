@@ -7,7 +7,10 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy:railway": "./deploy-railway.sh",
+    "deploy:vercel": "./deploy-vercel.sh",
+    "deploy:docker": "docker build -t my-nextjs-app . && docker run -p 3000:3000 -p 8000:8000 my-nextjs-app"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -231,7 +231,7 @@ def get_dashboard_data() -> Dict[str, Any]:
             COUNT(*) as transaction_count,
             SUM(ABS(amount)) as total_amount
         FROM transactions 
-        WHERE amount < 0 AND UPPER(description) NOT LIKE '%SCOTIABANK%'
+        WHERE amount > 0 AND UPPER(description) NOT LIKE '%SCOTIABANK%'
         GROUP BY 1
         HAVING SUM(ABS(amount)) > 0
         ORDER BY total_amount DESC

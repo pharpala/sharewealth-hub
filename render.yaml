@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sharewealth-hub
+    runtime: node
+    buildCommand: "npm install && pip3 install -r requirements.txt && npm run build"
+    startCommand: "./start-deploy.sh"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PYTHONPATH
+        value: /app
+      - key: DATABASE_URL
+        value: sqlite:///./finance.db
+      - key: CORS_ORIGINS
+        value: "*"
+    scaling:
+      minInstances: 1
+      maxInstances: 3

@@ -81,45 +81,28 @@ export default function PlanningPage() {
     setRiskTolerance("");
   };
 
-  const generateMockAnalysis = (income: string, rent: string, risk: string) => {
+  const callRBCAnalysis = async (income: string, rent: string, risk: string) => {
     const incomeNum = parseInt(income.replace(/[^0-9]/g, ""));
     const rentNum = parseInt(rent.replace(/[^0-9]/g, ""));
-    const disposableIncome = incomeNum - rentNum;
-    const savingsRate = Math.max(0.1, Math.min(0.4, disposableIncome / incomeNum));
-    const monthlySavings = disposableIncome * savingsRate;
     
-    // Calculate house price based on income and risk tolerance
-    const riskMultiplier = {
-      "very-aggressive": 4.5,
-      "aggressive": 4.0,
-      "moderate": 3.5,
-      "conservative": 3.0,
-      "very-conservative": 2.5
-    }[risk] || 3.5;
-    
-    const maxHousePrice = incomeNum * 12 * riskMultiplier;
-    const downPayment = maxHousePrice * 0.2;
-    const monthsToSave = Math.ceil(downPayment / monthlySavings);
-    
-    return {
-      monthlyIncome: incomeNum,
-      monthlyRent: rentNum,
-      disposableIncome,
-      recommendedSavings: monthlySavings,
-      maxHousePrice,
-      downPayment,
-      timeToSave: {
-        months: monthsToSave,
-        years: Math.ceil(monthsToSave / 12)
+    const response = await fetch("/api/v1/house-analysis", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer mock-jwt-token",
       },
-      riskProfile: risk,
-      recommendations: [
-        `Based on your ${risk.replace('-', ' ')} risk tolerance, you can afford a house up to $${maxHousePrice.toLocaleString()}`,
-        `You'll need $${downPayment.toLocaleString()} for a 20% down payment`,
-        `At $${monthlySavings.toLocaleString()}/month savings, you'll reach your goal in ${Math.ceil(monthsToSave / 12)} years`,
-        `Consider investing ${risk.includes('aggressive') ? '70-80%' : risk.includes('conservative') ? '30-40%' : '50-60%'} in growth assets`
-      ]
-    };
+      body: JSON.stringify({
+        monthly_income: incomeNum,
+        monthly_rent: rentNum,
+        risk_tolerance: risk,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Analysis failed: ${response.status}`);
+    }
+
+    return await response.json();
   };
 
   const handleFormSubmit = async () => {
@@ -130,13 +113,38 @@ export default function PlanningPage() {
     setShowForm(false); // Close modal
     setIsAnalyzing(true);
     
-    // Mock API call - simulate analysis
-    setTimeout(() => {
-      const results = generateMockAnalysis(monthlyIncome, monthlyRent, riskTolerance);
+    try {
+      // Call RBC API for real analysis
+      const results = await callRBCAnalysis(monthlyIncome, monthlyRent, riskTolerance);
       setAnalysisResults(results);
-      setIsAnalyzing(false);
       setAnalysisComplete(true);
-    }, 3000);
+    } catch (error) {
+      console.error("Analysis error:", error);
+      // Fallback to basic calculation if API fails
+      const incomeNum = parseInt(monthlyIncome.replace(/[^0-9]/g, ""));
+      const rentNum = parseInt(monthlyRent.replace(/[^0-9]/g, ""));
+      const disposableIncome = incomeNum - rentNum;
+      const monthlySavings = disposableIncome * 0.3;
+      const totalContributions = monthlySavings * 60; // 5 years
+      const fallbackResults = {
+        monthly_income: incomeNum,
+        monthly_rent: rentNum,
+        disposable_income: disposableIncome,
+        monthly_savings: monthlySavings,
+        investment_period_years: 5,
+        total_contributions: totalContributions,
+        projected_value_5_years: totalContributions * 1.4, // Basic 40% growth estimate
+        investment_growth: totalContributions * 0.4,
+        expected_annual_return: "7.0%",
+        risk_profile: riskTolerance,
+        portfolio_type: "balanced",
+        recommendations: ["Analysis temporarily unavailable - showing basic estimates"]
+      };
+      setAnalysisResults(fallbackResults);
+      setAnalysisComplete(true);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const quickPrompts = [
@@ -231,53 +239,125 @@ export default function PlanningPage() {
                   </div>
                 ) : analysisComplete && analysisResults ? (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <h3 className="text-2xl font-bold text-white mb-6 text-center">
-                      🏠 Your House Buying Analysis
-                    </h3>
+                    <div className="text-center mb-6">
+                      <h3 className="text-2xl font-bold text-white mb-2">
+                        💰 Your 5-Year Investment Projection
+                      </h3>
+                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
+                        analysisResults.rbc_api_used 
+                          ? 'bg-green-500/20 text-green-400 border border-green-400/30' 
+                          : 'bg-yellow-500/20 text-yellow-400 border border-yellow-400/30'
+                      }`}>
+                        {analysisResults.rbc_api_used ? '✅ RBC InvestEase API' : '⚠️ Estimated Data'}
+                        <span className="text-white/60">• {analysisResults.data_source}</span>
+                      </div>
+                    </div>
                     
-                    <div className="space-y-6">
-                      {/* Key Metrics */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-green-500/20 border border-green-400/30 rounded-xl p-4 text-center">
-                          <div className="text-2xl font-bold text-green-400">
-                            ${analysisResults.maxHousePrice.toLocaleString()}
-                          </div>
-                          <div className="text-sm text-white/70">Max House Price</div>
+                    <div className="space-y-8">
+                      {/* Currently Section */}
+                      <div>
+                        <div className="mb-6">
+                          <h4 className="text-lg font-semibold text-white mb-3">
+                            Currently
+                          </h4>
+                          <div className="h-px w-full bg-gradient-to-r from-transparent via-blue-400/50 to-transparent" />
                         </div>
-                        <div className="bg-blue-500/20 border border-blue-400/30 rounded-xl p-4 text-center">
-                          <div className="text-2xl font-bold text-blue-400">
-                            ${analysisResults.downPayment.toLocaleString()}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-blue-500/20 border border-blue-400/30 rounded-xl p-6 text-center">
+                            <div className="text-3xl font-bold text-blue-400 mb-2">
+                              ${analysisResults.monthly_savings?.toLocaleString()}
+                            </div>
+                            <div className="text-sm text-white/70 mb-1">Monthly Savings</div>
+                            <div className="text-xs text-white/50">
+                              Based on ${analysisResults.disposable_income?.toLocaleString()} disposable income
+                            </div>
                           </div>
-                          <div className="text-sm text-white/70">Down Payment (20%)</div>
-                        </div>
-                        <div className="bg-purple-500/20 border border-purple-400/30 rounded-xl p-4 text-center">
-                          <div className="text-2xl font-bold text-purple-400">
-                            {analysisResults.timeToSave.years} years
+                          
+                          <div className="bg-green-500/20 border border-green-400/30 rounded-xl p-6 text-center">
+                            <div className="text-3xl font-bold text-green-400 mb-2">
+                              ${analysisResults.total_contributions?.toLocaleString()}
+                            </div>
+                            <div className="text-sm text-white/70 mb-1">Total Contributions (5 years)</div>
+                            <div className="text-xs text-white/50">
+                              ${analysisResults.monthly_savings?.toLocaleString()}/month × 60 months
+                            </div>
                           </div>
-                          <div className="text-sm text-white/70">Time to Save</div>
                         </div>
                       </div>
 
-                      {/* Financial Breakdown */}
+                      {/* Changing a Habit Section */}
+                      <div>
+                        <div className="mb-6">
+                          <h4 className="text-lg font-semibold text-white mb-3">
+                            Changing a habit
+                          </h4>
+                          <div className="h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-orange-500/20 border border-orange-400/30 rounded-xl p-6 text-center">
+                            <div className="text-3xl font-bold text-orange-400 mb-2">
+                              ${((analysisResults.monthly_savings || 0) + (analysisResults.monthly_income || 0) * 0.125).toLocaleString()}
+                            </div>
+                            <div className="text-sm text-white/70 mb-1">Monthly Savings with cutting out Uber Eats </div>
+                            <div className="text-xs text-white/50">
+                              +${((analysisResults.monthly_income || 0) * 0.125).toLocaleString()}/month extra savings
+                            </div>
+                          </div>
+
+                          <div className="bg-purple-500/20 border border-purple-400/30 rounded-xl p-6 text-center">
+                            <div className="text-3xl font-bold text-purple-400 mb-2">
+                              ${analysisResults.projected_value_5_years?.toLocaleString()}
+                            </div>
+                            <div className="text-sm text-white/70 mb-1">
+                              {analysisResults.rbc_api_used ? 'RBC Projected Value' : 'Estimated Value'}
+                            </div>
+                            <div className="text-xs text-white/50">
+                              {analysisResults.rbc_analysis?.rbc_portfolio_type || 'balanced'} portfolio • {analysisResults.expected_annual_return} return
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Investment Details */}
                       <div className="bg-white/5 rounded-xl p-6">
-                        <h4 className="text-lg font-semibold text-white mb-4">💰 Financial Breakdown</h4>
+                        <h4 className="text-lg font-semibold text-white mb-4">📊 Investment Details</h4>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div className="flex justify-between">
                             <span className="text-white/70">Monthly Income:</span>
-                            <span className="text-white font-medium">${analysisResults.monthlyIncome.toLocaleString()}</span>
+                            <span className="text-white font-medium">${analysisResults.monthly_income?.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-white/70">Monthly Rent:</span>
-                            <span className="text-white font-medium">${analysisResults.monthlyRent.toLocaleString()}</span>
+                            <span className="text-white font-medium">${analysisResults.monthly_rent?.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-white/70">Disposable Income:</span>
-                            <span className="text-white font-medium">${analysisResults.disposableIncome.toLocaleString()}</span>
+                            <span className="text-white font-medium">${analysisResults.disposable_income?.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-white/70">Recommended Savings:</span>
-                            <span className="text-green-400 font-medium">${analysisResults.recommendedSavings.toLocaleString()}</span>
+                            <span className="text-white/70">Monthly Investment:</span>
+                            <span className="text-green-400 font-medium">${analysisResults.monthly_savings?.toLocaleString()}</span>
                           </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Expected Annual Return:</span>
+                            <span className="text-blue-400 font-medium">{analysisResults.expected_annual_return}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Investment Period:</span>
+                            <span className="text-white font-medium">{analysisResults.investment_period_years} years</span>
+                          </div>
+                          {analysisResults.rbc_analysis?.rbc_portfolio_type && (
+                            <div className="flex justify-between col-span-2">
+                              <span className="text-white/70">RBC Portfolio Strategy:</span>
+                              <span className="text-purple-400 font-medium capitalize">{analysisResults.rbc_analysis.rbc_portfolio_type}</span>
+                            </div>
+                          )}
+                          {analysisResults.rbc_api_used && analysisResults.rbc_analysis?.portfolio_id && (
+                            <div className="flex justify-between col-span-2">
+                              <span className="text-white/70">RBC Portfolio ID:</span>
+                              <span className="text-green-400 font-medium text-xs">{analysisResults.rbc_analysis.portfolio_id.substring(0, 8)}...</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -366,9 +446,11 @@ export default function PlanningPage() {
                       onFocus={(e) => {
                         const raw = e.currentTarget.value.replace(/[^0-9]/g, "");
                         setMonthlyIncome(raw);
+                        const el = e.currentTarget; // Store reference before async operation
                         requestAnimationFrame(() => {
-                          const el = e.currentTarget;
-                          el.selectionStart = el.selectionEnd = el.value.length;
+                          if (el && el.value !== undefined) {
+                            el.selectionStart = el.selectionEnd = el.value.length;
+                          }
                         });
                       }}
                       onBlur={(e) => {
@@ -395,9 +477,11 @@ export default function PlanningPage() {
                       onFocus={(e) => {
                         const raw = e.currentTarget.value.replace(/[^0-9]/g, "");
                         setMonthlyRent(raw);
+                        const el = e.currentTarget; // Store reference before async operation
                         requestAnimationFrame(() => {
-                          const el = e.currentTarget;
-                          el.selectionStart = el.selectionEnd = el.value.length;
+                          if (el && el.value !== undefined) {
+                            el.selectionStart = el.selectionEnd = el.value.length;
+                          }
                         });
                       }}
                       onBlur={(e) => {
@@ -549,7 +633,7 @@ export default function PlanningPage() {
               </div>
             </div>
           ))}
-          </section>
+        </section>
         )}
 
         {/* Middle Compact Control Bar - Hide when prompt is selected */}
@@ -613,9 +697,11 @@ export default function PlanningPage() {
                       const raw = e.currentTarget.value.replace(/[^0-9]/g, "");
                       setTarget(raw);
                       // place caret at end on next tick
+                      const el = e.currentTarget; // Store reference before async operation
                       requestAnimationFrame(() => {
-                        const el = e.currentTarget;
-                        el.selectionStart = el.selectionEnd = el.value.length;
+                        if (el && el.value !== undefined) {
+                          el.selectionStart = el.selectionEnd = el.value.length;
+                        }
                       });
                     }}
                     onBlur={(e) => {
@@ -638,7 +724,7 @@ export default function PlanningPage() {
               Tip: Set an amount that feels ambitious yet achievable for your timeframe.
             </p>
           </div>
-          </Card>
+        </Card>
         )}
       </main>
     </div>

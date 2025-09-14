@@ -438,7 +438,7 @@ export default function PlanningPage() {
                 <h3 className="text-xl font-bold text-white mb-2">🏠 House Analysis</h3>
                 <p className="text-sm text-white/70">Quick financial assessment</p>
                 <div className="mt-2 px-3 py-1 bg-blue-500/20 border border-blue-400/30 rounded-lg">
-                  <p className="text-xs text-blue-300">💳 Credit card spending will be automatically pulled from your uploaded statements</p>
+                  <p className="text-xs text-blue-300">💳 Credit card spending will be calculated from your exact transaction data</p>
                 </div>
               </div>
               

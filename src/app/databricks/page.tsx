@@ -23,14 +23,15 @@ interface DashboardData {
   recent_transactions: Transaction[]
   spending_by_category: Array<{
     category: string
-    amount: number
-    count: number
+    total_amount: number
+    transaction_count: number
     color: string
     icon: string
   }>
   monthly_trend: Array<{
-    month: string
-    amount: number
+    date: string
+    spending: number
+    transactions: number
   }>
 }
 
@@ -63,15 +64,14 @@ export default function DataPage() {
         const response = await fetch('http://127.0.0.1:8000/api/v1/transactions')
         const result = await response.json()
         setAllTransactions(result.transactions || [])
-        setShowAllTransactions(true)
       } catch (error) {
         console.error('Failed to fetch all transactions:', error)
-        // Fallback to existing data
-        setShowAllTransactions(true)
+        // Fallback to existing data if API fails
+        setAllTransactions(data?.recent_transactions || [])
       }
-    } else {
-      setShowAllTransactions(false)
     }
+    // Toggle the state regardless of API success/failure
+    setShowAllTransactions(!showAllTransactions)
   }
 
   if (loading) {
@@ -115,7 +115,7 @@ export default function DataPage() {
             <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${data.total_spent.toFixed(2)}</div>
+            <div className="text-2xl font-bold">${Math.abs(data.total_spent || 0).toFixed(2)}</div>
           </CardContent>
         </Card>
         
@@ -124,7 +124,7 @@ export default function DataPage() {
             <CardTitle className="text-sm font-medium">Total Credits</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${data.total_credits.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-green-600">${(data.total_credits || 0).toFixed(2)}</div>
           </CardContent>
         </Card>
         
@@ -133,7 +133,7 @@ export default function DataPage() {
             <CardTitle className="text-sm font-medium">Avg Transaction</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${data.avg_transaction.toFixed(2)}</div>
+            <div className="text-2xl font-bold">${Math.abs(data.avg_transaction || 0).toFixed(2)}</div>
           </CardContent>
         </Card>
       </div>
@@ -183,7 +183,7 @@ export default function DataPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold text-lg">${transaction.amount.toFixed(2)}</div>
+                  <div className="font-bold text-lg">${Math.abs(transaction.amount || 0).toFixed(2)}</div>
                 </div>
               </div>
             ))}
@@ -198,56 +198,6 @@ export default function DataPage() {
         </CardContent>
       </Card>
 
-      {/* Spending Categories */}
-      {data.spending_by_category.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Spending by Category</CardTitle>
-            <CardDescription>Breakdown of your expenses</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.spending_by_category.map((category, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="text-2xl">{category.icon}</div>
-                    <div>
-                      <div className="font-medium">{category.category}</div>
-                      <div className="text-sm text-muted-foreground">{category.count} transactions</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold">${category.amount.toFixed(2)}</div>
-                    <Badge variant="outline" style={{ backgroundColor: category.color + '20', color: category.color }}>
-                      {((category.amount / data.total_spent) * 100).toFixed(1)}%
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Monthly Trend */}
-      {data.monthly_trend.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Spending Trend</CardTitle>
-            <CardDescription>Your spending patterns over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.monthly_trend.map((month, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="font-medium">{month.month}</div>
-                  <div className="font-bold">${month.amount.toFixed(2)}</div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
       </div>
     </div>
   )

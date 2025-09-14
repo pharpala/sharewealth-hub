@@ -121,12 +121,12 @@ def get_user_credit_card_spending(user_id: str) -> float:
                 if statement_result:
                     statement_id = statement_result[0]
                     
-                    # Calculate exact spending from individual transactions
+                    # Calculate exact spending from individual transactions (exclude Scotiabank)
                     # Sum all positive amounts (spending/debits) from transactions
                     cursor.execute("""
                     SELECT SUM(ABS(amount)) as total_spending
                     FROM transactions
-                    WHERE statement_id = ? AND amount > 0
+                    WHERE statement_id = ? AND amount < 0 AND UPPER(description) NOT LIKE '%SCOTIABANK%'
                     """, (statement_id,))
                     
                     spending_result = cursor.fetchone()
@@ -167,12 +167,12 @@ def get_user_credit_card_spending(user_id: str) -> float:
                 if statement_result:
                     statement_id = statement_result[0]
                     
-                    # Calculate exact spending from individual transactions
+                    # Calculate exact spending from individual transactions (exclude Scotiabank)
                     # Sum all positive amounts (spending/debits) from transactions
                     cur.execute(f"""
                     SELECT SUM(ABS(amount)) as total_spending
                     FROM `{DATABRICKS_SCHEMA}`.`transactions`
-                    WHERE statement_id = ? AND amount > 0
+                    WHERE statement_id = ? AND amount < 0 AND UPPER(description) NOT LIKE '%SCOTIABANK%'
                     """, (statement_id,))
                     
                     spending_result = cur.fetchone()
@@ -626,6 +626,44 @@ if AUTH_AVAILABLE:
     def get_dashboard_with_auth(user=Depends(auth_required)):
         """Dashboard endpoint with authentication"""
         return get_dashboard(user)
+
+@app.get("/api/v1/transactions")
+def get_all_transactions():
+    """Get all transactions excluding Scotiabank internal transactions"""
+    try:
+        if SQLITE_AVAILABLE:
+            from sqlite_db import get_db_connection
+            
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get all transactions excluding Scotiabank
+                cursor.execute("""
+                SELECT transaction_date, description, amount, location
+                FROM transactions 
+                WHERE UPPER(description) NOT LIKE '%SCOTIABANK%'
+                ORDER BY transaction_date DESC, post_date DESC
+                """)
+                transactions = cursor.fetchall()
+                
+                return {
+                    "transactions": [
+                        {
+                            "date": trans[0],
+                            "description": trans[1],
+                            "amount": float(trans[2]) if trans[2] else 0.0,
+                            "location": trans[3] or ""
+                        }
+                        for trans in transactions
+                    ],
+                    "total_count": len(transactions)
+                }
+        else:
+            return {"transactions": [], "total_count": 0}
+            
+    except Exception as e:
+        print(f"❌ Error fetching all transactions: {e}")
+        return {"transactions": [], "total_count": 0}
 
 if __name__ == "__main__":
     # Run: python main.py

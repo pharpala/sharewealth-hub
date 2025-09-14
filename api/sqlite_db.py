@@ -197,7 +197,7 @@ def get_dashboard_data() -> Dict[str, Any]:
     
     try:
         # Get spending overview
-        # Note: All transactions are stored as positive amounts (spending)
+        # Note: All transactions are stored as negative amounts (spending), exclude Scotiabank internal transactions
         cursor.execute("""
         SELECT 
             COUNT(*) as total_transactions,
@@ -205,10 +205,11 @@ def get_dashboard_data() -> Dict[str, Any]:
             0 as total_credits,
             COALESCE(AVG(amount), 0) as avg_transaction
         FROM transactions
+        WHERE UPPER(description) NOT LIKE '%SCOTIABANK%'
         """)
         overview = cursor.fetchone()
         
-        # Get spending by category (all transactions are positive amounts = spending)
+        # Get spending by category (all transactions are negative amounts = spending, exclude Scotiabank)
         cursor.execute("""
         SELECT 
             CASE 
@@ -228,31 +229,33 @@ def get_dashboard_data() -> Dict[str, Any]:
                 ELSE 'Other'
             END as category,
             COUNT(*) as transaction_count,
-            SUM(amount) as total_amount
+            SUM(ABS(amount)) as total_amount
         FROM transactions 
+        WHERE amount < 0 AND UPPER(description) NOT LIKE '%SCOTIABANK%'
         GROUP BY 1
-        HAVING SUM(amount) > 0
+        HAVING SUM(ABS(amount)) > 0
         ORDER BY total_amount DESC
         """)
         categories = cursor.fetchall()
         
-        # Get recent transactions
+        # Get recent transactions (exclude Scotiabank internal transactions)
         cursor.execute("""
         SELECT transaction_date, description, amount, location
         FROM transactions 
+        WHERE UPPER(description) NOT LIKE '%SCOTIABANK%'
         ORDER BY transaction_date DESC, post_date DESC
         LIMIT 10
         """)
         recent = cursor.fetchall()
         
-        # Get monthly trend
+        # Get monthly trend (exclude Scotiabank internal transactions)
         cursor.execute("""
         SELECT 
             transaction_date,
             SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as daily_spending,
             COUNT(*) as transaction_count
         FROM transactions 
-        WHERE amount < 0
+        WHERE amount < 0 AND UPPER(description) NOT LIKE '%SCOTIABANK%'
         GROUP BY transaction_date
         ORDER BY transaction_date
         """)

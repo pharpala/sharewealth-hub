@@ -35,8 +35,109 @@ export default function PlanningPage() {
   const [goal, setGoal] = useState<"house" | "purchase" | "explore">("house");
   const [duration, setDuration] = useState("3"); // years
   const [target, setTarget] = useState<string>("");
+  const [isPromptSelected, setIsPromptSelected] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
+  
+  // House buying form data
+  const [monthlyIncome, setMonthlyIncome] = useState("");
+  const [monthlyRent, setMonthlyRent] = useState("");
+  const [riskTolerance, setRiskTolerance] = useState<string>("");
 
   const prettyTarget = useMemo(() => (target ? `$ ${formatCurrency(target)}` : ""), [target]);
+  const prettyIncome = useMemo(() => (monthlyIncome ? `$ ${formatCurrency(monthlyIncome)}` : ""), [monthlyIncome]);
+  const prettyRent = useMemo(() => (monthlyRent ? `$ ${formatCurrency(monthlyRent)}` : ""), [monthlyRent]);
+
+  const riskOptions = [
+    { value: "very-aggressive", label: "Very Aggressive", description: "High risk, high reward - I want maximum growth potential" },
+    { value: "aggressive", label: "Aggressive", description: "Above average risk - I can handle volatility for better returns" },
+    { value: "moderate", label: "Moderate", description: "Balanced approach - Some risk for steady growth" },
+    { value: "conservative", label: "Conservative", description: "Lower risk - I prefer stability over high returns" },
+    { value: "very-conservative", label: "Very Conservative", description: "Minimal risk - Capital preservation is my priority" }
+  ];
+
+  const handlePromptSelect = (promptId: "house" | "car" | "explore") => {
+    setPrompt(promptId);
+    setIsPromptSelected(true);
+    
+    // Show form for house buying
+    if (promptId === "house") {
+      setTimeout(() => setShowForm(true), 800);
+    }
+  };
+
+  const handleBackToSelection = () => {
+    setPrompt(null);
+    setIsPromptSelected(false);
+    setShowForm(false);
+    setIsAnalyzing(false);
+    setAnalysisComplete(false);
+    setAnalysisResults(null);
+    // Reset form data
+    setMonthlyIncome("");
+    setMonthlyRent("");
+    setRiskTolerance("");
+  };
+
+  const generateMockAnalysis = (income: string, rent: string, risk: string) => {
+    const incomeNum = parseInt(income.replace(/[^0-9]/g, ""));
+    const rentNum = parseInt(rent.replace(/[^0-9]/g, ""));
+    const disposableIncome = incomeNum - rentNum;
+    const savingsRate = Math.max(0.1, Math.min(0.4, disposableIncome / incomeNum));
+    const monthlySavings = disposableIncome * savingsRate;
+    
+    // Calculate house price based on income and risk tolerance
+    const riskMultiplier = {
+      "very-aggressive": 4.5,
+      "aggressive": 4.0,
+      "moderate": 3.5,
+      "conservative": 3.0,
+      "very-conservative": 2.5
+    }[risk] || 3.5;
+    
+    const maxHousePrice = incomeNum * 12 * riskMultiplier;
+    const downPayment = maxHousePrice * 0.2;
+    const monthsToSave = Math.ceil(downPayment / monthlySavings);
+    
+    return {
+      monthlyIncome: incomeNum,
+      monthlyRent: rentNum,
+      disposableIncome,
+      recommendedSavings: monthlySavings,
+      maxHousePrice,
+      downPayment,
+      timeToSave: {
+        months: monthsToSave,
+        years: Math.ceil(monthsToSave / 12)
+      },
+      riskProfile: risk,
+      recommendations: [
+        `Based on your ${risk.replace('-', ' ')} risk tolerance, you can afford a house up to $${maxHousePrice.toLocaleString()}`,
+        `You'll need $${downPayment.toLocaleString()} for a 20% down payment`,
+        `At $${monthlySavings.toLocaleString()}/month savings, you'll reach your goal in ${Math.ceil(monthsToSave / 12)} years`,
+        `Consider investing ${risk.includes('aggressive') ? '70-80%' : risk.includes('conservative') ? '30-40%' : '50-60%'} in growth assets`
+      ]
+    };
+  };
+
+  const handleFormSubmit = async () => {
+    if (!monthlyIncome || !monthlyRent || !riskTolerance) {
+      return; // Basic validation
+    }
+
+    setShowForm(false); // Close modal
+    setIsAnalyzing(true);
+    
+    // Mock API call - simulate analysis
+    setTimeout(() => {
+      const results = generateMockAnalysis(monthlyIncome, monthlyRent, riskTolerance);
+      setAnalysisResults(results);
+      setIsAnalyzing(false);
+      setAnalysisComplete(true);
+    }, 3000);
+  };
 
   const quickPrompts = [
     {
@@ -67,9 +168,17 @@ export default function PlanningPage() {
       />
 
       {/* Content */}
-      <main className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-8 px-4 pb-24 pt-14 sm:pt-20">
-        {/* Heading */}
-        <div className="text-center space-y-4">
+      <main className={cn(
+        "relative mx-auto flex w-full flex-col items-center transition-all duration-1000 ease-in-out",
+        isPromptSelected 
+          ? "max-w-4xl px-4 pt-8" 
+          : "max-w-6xl gap-8 px-4 pb-24 pt-14 sm:pt-20"
+      )}>
+        {/* Heading - Hide when prompt is selected */}
+        <div className={cn(
+          "text-center space-y-4 transition-all duration-700 ease-in-out",
+          isPromptSelected ? "opacity-0 scale-95 -translate-y-12 pointer-events-none absolute" : "opacity-100 scale-100 translate-y-0"
+        )}>
           <h1 className="text-balance bg-gradient-to-b from-white via-white/95 to-white/70 bg-clip-text text-3xl font-bold leading-tight text-transparent sm:text-5xl lg:text-6xl">
             Choose a goal, a timeframe, and stick to it.
           </h1>
@@ -78,8 +187,292 @@ export default function PlanningPage() {
           </div>
         </div>
 
-        {/* Top Prompt Cards */}
-        <section className="mt-[2%] grid w-full grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Selected Prompt Display - Move to top when selected */}
+        {isPromptSelected && prompt && (
+          <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-out">
+            <div className="text-center space-y-6">
+              <button
+                onClick={handleBackToSelection}
+                className="text-white/60 hover:text-white text-sm transition-colors duration-200 mb-6"
+              >
+                ← Back to selection
+              </button>
+              
+              <div className="relative max-w-3xl mx-auto">
+                {/* Gradient border wrapper */}
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 opacity-75 blur-sm" />
+                
+                <div className="relative rounded-2xl bg-gradient-to-b from-white/15 to-white/5 p-8 backdrop-blur-sm shadow-[0_20px_60px_-12px_rgba(147,51,234,0.4)]">
+                  <div className="flex items-center justify-center gap-4 mb-6">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 ring-2 ring-white/30 shadow-lg shadow-purple-500/20">
+                      {(() => {
+                        const selectedPrompt = quickPrompts.find(p => p.id === prompt);
+                        const Icon = selectedPrompt?.Icon;
+                        return Icon ? <Icon className="h-10 w-10 text-white drop-shadow-sm" /> : null;
+                      })()}
+                    </div>
+                  </div>
+                  
+                  <h2 className="text-3xl font-bold text-white mb-4">
+                    {quickPrompts.find(p => p.id === prompt)?.label}
+                  </h2>
+                  
+                  <div className="h-0.5 w-full rounded-full bg-gradient-to-r from-purple-400 to-blue-400 mx-auto" />
+                </div>
+              </div>
+            </div>
+            
+            {/* AI Response Area - Simplified */}
+            <div className="mt-12 w-full max-w-4xl mx-auto">
+              <div className="min-h-[200px] rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm">
+                {prompt === "house" && !isAnalyzing && !analysisComplete && !showForm ? (
+                  <div className="text-center text-white/60">
+                    <div className="animate-pulse">Preparing your personalized analysis...</div>
+                  </div>
+                ) : analysisComplete && analysisResults ? (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <h3 className="text-2xl font-bold text-white mb-6 text-center">
+                      🏠 Your House Buying Analysis
+                    </h3>
+                    
+                    <div className="space-y-6">
+                      {/* Key Metrics */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-green-500/20 border border-green-400/30 rounded-xl p-4 text-center">
+                          <div className="text-2xl font-bold text-green-400">
+                            ${analysisResults.maxHousePrice.toLocaleString()}
+                          </div>
+                          <div className="text-sm text-white/70">Max House Price</div>
+                        </div>
+                        <div className="bg-blue-500/20 border border-blue-400/30 rounded-xl p-4 text-center">
+                          <div className="text-2xl font-bold text-blue-400">
+                            ${analysisResults.downPayment.toLocaleString()}
+                          </div>
+                          <div className="text-sm text-white/70">Down Payment (20%)</div>
+                        </div>
+                        <div className="bg-purple-500/20 border border-purple-400/30 rounded-xl p-4 text-center">
+                          <div className="text-2xl font-bold text-purple-400">
+                            {analysisResults.timeToSave.years} years
+                          </div>
+                          <div className="text-sm text-white/70">Time to Save</div>
+                        </div>
+                      </div>
+
+                      {/* Financial Breakdown */}
+                      <div className="bg-white/5 rounded-xl p-6">
+                        <h4 className="text-lg font-semibold text-white mb-4">💰 Financial Breakdown</h4>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Monthly Income:</span>
+                            <span className="text-white font-medium">${analysisResults.monthlyIncome.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Monthly Rent:</span>
+                            <span className="text-white font-medium">${analysisResults.monthlyRent.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Disposable Income:</span>
+                            <span className="text-white font-medium">${analysisResults.disposableIncome.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Recommended Savings:</span>
+                            <span className="text-green-400 font-medium">${analysisResults.recommendedSavings.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Recommendations */}
+                      <div className="bg-white/5 rounded-xl p-6">
+                        <h4 className="text-lg font-semibold text-white mb-4">📋 Personalized Recommendations</h4>
+                        <div className="space-y-3">
+                          {analysisResults.recommendations.map((rec: string, index: number) => (
+                            <div key={index} className="flex items-start gap-3">
+                              <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
+                              <p className="text-white/80 text-sm">{rec}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-4 pt-4">
+                        <Button
+                          onClick={handleBackToSelection}
+                          variant="outline"
+                          className="flex-1 border-white/20 text-white hover:bg-white/10"
+                        >
+                          Try Another Goal
+                        </Button>
+                        <Button
+                          className="flex-1 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                          onClick={() => {
+                            // Future: Navigate to detailed planning page
+                            console.log("Navigate to detailed planning");
+                          }}
+                        >
+                          Create Detailed Plan
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : isAnalyzing ? (
+                  <div className="text-center space-y-4">
+                    <div className="animate-spin w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full mx-auto"></div>
+                    <div className="text-white/80">Analyzing your financial situation...</div>
+                    <div className="text-white/60 text-sm">This may take a few moments</div>
+                  </div>
+                ) : (
+                  <div className="text-center text-white/60">
+                    {/* This is where other prompt responses or AI typing animation will go */}
+                    <div className="animate-pulse">AI analysis will appear here...</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Compact Form Modal - Overlay */}
+        {prompt === "house" && showForm && !isAnalyzing && !analysisComplete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowForm(false)}
+            />
+            
+            {/* Modal */}
+            <div className="relative w-full max-w-md bg-gradient-to-b from-white/15 to-white/5 rounded-2xl border border-white/20 p-6 backdrop-blur-md shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-bold text-white mb-2">🏠 House Analysis</h3>
+                <p className="text-sm text-white/70">Quick financial assessment</p>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Monthly Income - Compact */}
+                <div>
+                  <label className="block text-xs font-medium text-white/80 mb-1.5">
+                    Monthly income after taxes
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" />
+                    <Input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="5,000"
+                      className="pl-8 h-9 text-sm bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      value={prettyIncome}
+                      onChange={(e) => setMonthlyIncome(e.target.value)}
+                      onFocus={(e) => {
+                        const raw = e.currentTarget.value.replace(/[^0-9]/g, "");
+                        setMonthlyIncome(raw);
+                        requestAnimationFrame(() => {
+                          const el = e.currentTarget;
+                          el.selectionStart = el.selectionEnd = el.value.length;
+                        });
+                      }}
+                      onBlur={(e) => {
+                        setMonthlyIncome(e.currentTarget.value.replace(/[^0-9]/g, ""));
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Monthly Rent - Compact */}
+                <div>
+                  <label className="block text-xs font-medium text-white/80 mb-1.5">
+                    Monthly rent/housing costs
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" />
+                    <Input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="1,500"
+                      className="pl-8 h-9 text-sm bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      value={prettyRent}
+                      onChange={(e) => setMonthlyRent(e.target.value)}
+                      onFocus={(e) => {
+                        const raw = e.currentTarget.value.replace(/[^0-9]/g, "");
+                        setMonthlyRent(raw);
+                        requestAnimationFrame(() => {
+                          const el = e.currentTarget;
+                          el.selectionStart = el.selectionEnd = el.value.length;
+                        });
+                      }}
+                      onBlur={(e) => {
+                        setMonthlyRent(e.currentTarget.value.replace(/[^0-9]/g, ""));
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Risk Tolerance - Compact Options Bar */}
+                <div>
+                  <label className="block text-xs font-medium text-white/80 mb-2">
+                    Investment risk tolerance
+                  </label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {riskOptions.map((option, index) => (
+                      <button
+                        key={option.value}
+                        onClick={() => setRiskTolerance(option.value)}
+                        className={cn(
+                          "relative p-2 rounded-lg text-xs font-medium transition-all duration-200 text-center",
+                          riskTolerance === option.value
+                            ? "bg-purple-500/30 text-white ring-1 ring-purple-400/50"
+                            : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                        )}
+                        title={option.description}
+                      >
+                        <div className="flex flex-col items-center gap-1">
+                          <div className={cn(
+                            "w-2 h-2 rounded-full transition-all",
+                            riskTolerance === option.value ? "bg-purple-400" : "bg-white/40"
+                          )} />
+                          <span className="leading-tight">
+                            {option.label.split(' ')[0]}
+                            <br />
+                            <span className="text-[10px] opacity-80">
+                              {option.label.split(' ')[1] || ''}
+                            </span>
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {riskTolerance && (
+                    <p className="text-[10px] text-white/60 mt-1 text-center">
+                      {riskOptions.find(opt => opt.value === riskTolerance)?.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => setShowForm(false)}
+                    variant="outline"
+                    className="flex-1 h-8 text-xs border-white/20 text-white hover:bg-white/10"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleFormSubmit}
+                    disabled={!monthlyIncome || !monthlyRent || !riskTolerance}
+                    className="flex-2 h-8 text-xs bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed"
+                  >
+                    Analyze
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Top Prompt Cards - Hide when prompt is selected */}
+        {!isPromptSelected && (
+          <section className="mt-[2%] grid w-full grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {quickPrompts.map(({ id, label, Icon }) => (
             <div key={id} className="group relative">
               {/* Gradient border wrapper */}
@@ -97,7 +490,7 @@ export default function PlanningPage() {
                 className=""
               >
                 <button
-                  onClick={() => setPrompt(id)}
+                  onClick={() => handlePromptSelect(id)}
                   className={cn(
                     "relative h-full w-full rounded-2xl bg-gradient-to-b p-6 text-left transition-all duration-300",
                     "from-white/8 to-white/2 group-hover:from-white/12 group-hover:to-white/4",
@@ -156,10 +549,12 @@ export default function PlanningPage() {
               </div>
             </div>
           ))}
-        </section>
+          </section>
+        )}
 
-        {/* Middle Compact Control Bar */}
-        <Card className="mt-[6%] w-full max-w-4xl rounded-2xl border-white/10 bg-white/5 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_30px_80px_-30px_rgba(0,0,0,0.45)] backdrop-blur-md">
+        {/* Middle Compact Control Bar - Hide when prompt is selected */}
+        {!isPromptSelected && (
+          <Card className="mt-[6%] w-full max-w-4xl rounded-2xl border-white/10 bg-white/5 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_30px_80px_-30px_rgba(0,0,0,0.45)] backdrop-blur-md animate-in fade-in slide-in-from-bottom-6 duration-700">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
               {/* Goal */}
@@ -243,7 +638,8 @@ export default function PlanningPage() {
               Tip: Set an amount that feels ambitious yet achievable for your timeframe.
             </p>
           </div>
-        </Card>
+          </Card>
+        )}
       </main>
     </div>
   );

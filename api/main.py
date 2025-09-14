@@ -78,3 +78,7 @@ def get_statement(id: str, user=Depends(auth_required)):
         "text_extracted": statement.text_extracted,
         "enriched_data": statement.enriched_data
     }
+
+@app.get("/api/v1/dashboard/")
+def get_dashboard(user=Depends(auth_required)):
+    

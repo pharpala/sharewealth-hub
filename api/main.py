@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModefrom typing import Optional
 from datetime import datetime
 from DataExtractor.DataExtractor import extract_data
 import json
@@ -54,6 +53,7 @@ except ImportError:
 class HouseAnalysisRequest(BaseModel):
     monthly_income: float
     monthly_rent: float
+    monthly_credit_card: float
     risk_tolerance: str
 
 app = FastAPI()
@@ -289,7 +289,7 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
         expected_annual_return = portfolio_info["annual_return"]
         
         # Calculate basic financial metrics
-        disposable_income = request.monthly_income - request.monthly_rent
+        disposable_income = request.monthly_income - request.monthly_rent - request.monthly_credit_card
         
         # Use all disposable income as savings/investment
         # Assumes user has already accounted for all other expenses in their rent/housing costs
@@ -418,10 +418,11 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
                 f"RBC API integration temporarily unavailable - showing calculated estimates",
                 f"Your {portfolio_type.replace('_', ' ')} portfolio strategy aligns with your risk level"
             ])
-
+        
         return {
             "monthly_income": request.monthly_income,
             "monthly_rent": request.monthly_rent,
+            "monthly_credit_card": request.monthly_credit_card,
             "disposable_income": disposable_income,
             "monthly_savings": monthly_savings,
             "investment_period_years": 5,

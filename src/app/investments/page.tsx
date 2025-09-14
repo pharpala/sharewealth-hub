@@ -44,11 +44,13 @@ export default function PlanningPage() {
   // House buying form data
   const [monthlyIncome, setMonthlyIncome] = useState("");
   const [monthlyRent, setMonthlyRent] = useState("");
+  const [creditCardSpend, setCreditCardSpend] = useState("");
   const [riskTolerance, setRiskTolerance] = useState<string>("");
 
   const prettyTarget = useMemo(() => (target ? `$ ${formatCurrency(target)}` : ""), [target]);
   const prettyIncome = useMemo(() => (monthlyIncome ? `$ ${formatCurrency(monthlyIncome)}` : ""), [monthlyIncome]);
   const prettyRent = useMemo(() => (monthlyRent ? `$ ${formatCurrency(monthlyRent)}` : ""), [monthlyRent]);
+  const prettyCreditCard = useMemo(() => (creditCardSpend ? `$ ${formatCurrency(creditCardSpend)}` : ""), [creditCardSpend]);
 
   const riskOptions = [
     { value: "very-aggressive", label: "Very Aggressive", description: "High risk, high reward - I want maximum growth potential" },
@@ -78,12 +80,14 @@ export default function PlanningPage() {
     // Reset form data
     setMonthlyIncome("");
     setMonthlyRent("");
+    setCreditCardSpend("");
     setRiskTolerance("");
   };
 
-  const callRBCAnalysis = async (income: string, rent: string, risk: string) => {
+  const callRBCAnalysis = async (income: string, rent: string, creditCard: string, risk: string) => {
     const incomeNum = parseInt(income.replace(/[^0-9]/g, ""));
     const rentNum = parseInt(rent.replace(/[^0-9]/g, ""));
+    const creditCardNum = parseInt(creditCard.replace(/[^0-9]/g, ""));
     
     const response = await fetch("/api/v1/house-analysis", {
       method: "POST",
@@ -94,6 +98,7 @@ export default function PlanningPage() {
       body: JSON.stringify({
         monthly_income: incomeNum,
         monthly_rent: rentNum,
+        monthly_credit_card: creditCardNum,
         risk_tolerance: risk,
       }),
     });
@@ -106,7 +111,7 @@ export default function PlanningPage() {
   };
 
   const handleFormSubmit = async () => {
-    if (!monthlyIncome || !monthlyRent || !riskTolerance) {
+    if (!monthlyIncome || !monthlyRent || !creditCardSpend || !riskTolerance) {
       return; // Basic validation
     }
 
@@ -115,7 +120,7 @@ export default function PlanningPage() {
     
     try {
       // Call RBC API for real analysis
-      const results = await callRBCAnalysis(monthlyIncome, monthlyRent, riskTolerance);
+      const results = await callRBCAnalysis(monthlyIncome, monthlyRent, creditCardSpend, riskTolerance);
       setAnalysisResults(results);
       setAnalysisComplete(true);
     } catch (error) {
@@ -123,12 +128,14 @@ export default function PlanningPage() {
       // Fallback to basic calculation if API fails
       const incomeNum = parseInt(monthlyIncome.replace(/[^0-9]/g, ""));
       const rentNum = parseInt(monthlyRent.replace(/[^0-9]/g, ""));
-      const disposableIncome = incomeNum - rentNum;
+      const creditCardNum = parseInt(creditCardSpend.replace(/[^0-9]/g, ""));
+      const disposableIncome = incomeNum - rentNum - creditCardNum;
       const monthlySavings = disposableIncome * 0.3;
       const totalContributions = monthlySavings * 60; // 5 years
       const fallbackResults = {
         monthly_income: incomeNum,
         monthly_rent: rentNum,
+        monthly_credit_card: creditCardNum,
         disposable_income: disposableIncome,
         monthly_savings: monthlySavings,
         investment_period_years: 5,
@@ -269,7 +276,7 @@ export default function PlanningPage() {
                             </div>
                             <div className="text-sm text-white/70 mb-1">Monthly Savings</div>
                             <div className="text-xs text-white/50">
-                              Based on ${analysisResults.disposable_income?.toLocaleString()} disposable income
+                              After rent (${analysisResults.monthly_rent?.toLocaleString()}) & credit cards (${analysisResults.monthly_credit_card?.toLocaleString()})
                             </div>
                           </div>
                           
@@ -296,11 +303,11 @@ export default function PlanningPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="bg-orange-500/20 border border-orange-400/30 rounded-xl p-6 text-center">
                             <div className="text-3xl font-bold text-orange-400 mb-2">
-                              ${((analysisResults.monthly_savings || 0) + (analysisResults.monthly_income || 0) * 0.125).toLocaleString()}
+                              ${((analysisResults.monthly_savings || 0) + (analysisResults.monthly_credit_card || 0) * 0.3).toLocaleString()}
                             </div>
-                            <div className="text-sm text-white/70 mb-1">Monthly Savings with cutting out Uber Eats </div>
+                            <div className="text-sm text-white/70 mb-1">Monthly Savings by reducing credit card spending by 30%</div>
                             <div className="text-xs text-white/50">
-                              +${((analysisResults.monthly_income || 0) * 0.125).toLocaleString()}/month extra savings
+                              +${((analysisResults.monthly_credit_card || 0) * 0.3).toLocaleString()}/month extra savings
                             </div>
                           </div>
 
@@ -329,6 +336,10 @@ export default function PlanningPage() {
                           <div className="flex justify-between">
                             <span className="text-white/70">Monthly Rent:</span>
                             <span className="text-white font-medium">${analysisResults.monthly_rent?.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Credit Card Spending:</span>
+                            <span className="text-white font-medium">${analysisResults.monthly_credit_card?.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-white/70">Disposable Income:</span>
@@ -491,6 +502,37 @@ export default function PlanningPage() {
                   </div>
                 </div>
 
+                {/* Monthly Credit Card Spending - Compact */}
+                <div>
+                  <label className="block text-xs font-medium text-white/80 mb-1.5">
+                    Monthly credit card spending
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" />
+                    <Input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="800"
+                      className="pl-8 h-9 text-sm bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      value={prettyCreditCard}
+                      onChange={(e) => setCreditCardSpend(e.target.value)}
+                      onFocus={(e) => {
+                        const raw = e.currentTarget.value.replace(/[^0-9]/g, "");
+                        setCreditCardSpend(raw);
+                        const el = e.currentTarget; // Store reference before async operation
+                        requestAnimationFrame(() => {
+                          if (el && el.value !== undefined) {
+                            el.selectionStart = el.selectionEnd = el.value.length;
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        setCreditCardSpend(e.currentTarget.value.replace(/[^0-9]/g, ""));
+                      }}
+                    />
+                  </div>
+                </div>
+
                 {/* Risk Tolerance - Compact Options Bar */}
                 <div>
                   <label className="block text-xs font-medium text-white/80 mb-2">
@@ -543,7 +585,7 @@ export default function PlanningPage() {
                   </Button>
                   <Button
                     onClick={handleFormSubmit}
-                    disabled={!monthlyIncome || !monthlyRent || !riskTolerance}
+                    disabled={!monthlyIncome || !monthlyRent || !creditCardSpend || !riskTolerance}
                     className="flex-2 h-8 text-xs bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed"
                   >
                     Analyze

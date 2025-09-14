@@ -98,9 +98,47 @@ def ensure_rbc_authenticated():
         return False
 
 def get_user_credit_card_spending(user_id: str) -> float:
-    """Get user's monthly credit card spending from Databricks or SQLite"""
+    """Get user's exact monthly credit card spending from individual transactions in SQLite (primary) or Databricks (fallback)"""
     
-    # Try Databricks first
+    # Try SQLite first - this is our primary storage as agreed
+    if SQLITE_AVAILABLE:
+        try:
+            from sqlite_db import get_db_connection
+            
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get the most recent statement ID for the user
+                cursor.execute("""
+                SELECT statement_id
+                FROM statements
+                WHERE user_id = ?
+                ORDER BY statement_date DESC, inserted_at DESC
+                LIMIT 1
+                """, (user_id,))
+                
+                statement_result = cursor.fetchone()
+                if statement_result:
+                    statement_id = statement_result[0]
+                    
+                    # Calculate exact spending from individual transactions
+                    # Sum all positive amounts (spending/debits) from transactions
+                    cursor.execute("""
+                    SELECT SUM(ABS(amount)) as total_spending
+                    FROM transactions
+                    WHERE statement_id = ? AND amount > 0
+                    """, (statement_id,))
+                    
+                    spending_result = cursor.fetchone()
+                    if spending_result and spending_result[0]:
+                        monthly_spending = float(spending_result[0])
+                        print(f"✅ Calculated exact credit card spending from SQLite transactions: ${monthly_spending}")
+                        return monthly_spending
+                    
+        except Exception as e:
+            print(f"❌ SQLite transaction query failed: {e}")
+    
+    # Fallback to Databricks - calculate from actual transactions
     if DATABRICKS_SQL_AVAILABLE:
         try:
             # Databricks configuration
@@ -116,49 +154,35 @@ def get_user_credit_card_spending(user_id: str) -> float:
             ) as conn:
                 cur = conn.cursor()
                 
-                # Get the most recent statement's purchases (monthly credit card spending)
+                # Get the most recent statement ID for the user
                 cur.execute(f"""
-                SELECT purchases
+                SELECT statement_id
                 FROM `{DATABRICKS_SCHEMA}`.`statements`
-                WHERE user_id = ? AND purchases IS NOT NULL
+                WHERE user_id = ?
                 ORDER BY statement_date DESC, inserted_at DESC
                 LIMIT 1
                 """, (user_id,))
                 
-                result = cur.fetchone()
-                if result and result[0]:
-                    monthly_spending = float(result[0])
-                    print(f"✅ Found credit card spending from Databricks: ${monthly_spending}")
-                    return monthly_spending
+                statement_result = cur.fetchone()
+                if statement_result:
+                    statement_id = statement_result[0]
+                    
+                    # Calculate exact spending from individual transactions
+                    # Sum all positive amounts (spending/debits) from transactions
+                    cur.execute(f"""
+                    SELECT SUM(ABS(amount)) as total_spending
+                    FROM `{DATABRICKS_SCHEMA}`.`transactions`
+                    WHERE statement_id = ? AND amount > 0
+                    """, (statement_id,))
+                    
+                    spending_result = cur.fetchone()
+                    if spending_result and spending_result[0]:
+                        monthly_spending = float(spending_result[0])
+                        print(f"✅ Calculated exact credit card spending from Databricks transactions: ${monthly_spending}")
+                        return monthly_spending
                     
         except Exception as e:
-            print(f"❌ Databricks query failed: {e}")
-    
-    # Fallback to SQLite
-    if SQLITE_AVAILABLE:
-        try:
-            from sqlite_db import get_db_connection
-            
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Get the most recent statement's purchases
-                cursor.execute("""
-                SELECT purchases
-                FROM statements
-                WHERE user_id = ? AND purchases IS NOT NULL
-                ORDER BY statement_date DESC, inserted_at DESC
-                LIMIT 1
-                """, (user_id,))
-                
-                result = cursor.fetchone()
-                if result and result[0]:
-                    monthly_spending = float(result[0])
-                    print(f"✅ Found credit card spending from SQLite: ${monthly_spending}")
-                    return monthly_spending
-                    
-        except Exception as e:
-            print(f"❌ SQLite query failed: {e}")
+            print(f"❌ Databricks transaction query failed: {e}")
     
     # If no data found, return 0 and let user input manually
     print(f"⚠️ No credit card spending data found for user {user_id}")
@@ -203,7 +227,7 @@ def read_root():
 
 @app.post("/api/v1/test-upload")
 async def test_upload(file: UploadFile = File(...)):
-    return {
+            return {
         "filename": file.filename,
         "content_type": file.content_type,
         "size": file.size,
@@ -223,31 +247,51 @@ async def upload(file: UploadFile = File(...)):
     if len(data) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="File too large for demo endpoint")
 
-    res, text = extract_data(data)
-
-    # Convert model string → dict
-    try:
-        statement = parse_model_json(res)
-    except Exception as e:
-        # Helpful diagnostics if parsing fails
-        raise HTTPException(status_code=500, detail=f"Failed to parse model JSON: {e}")
-
-    # Pretty-print to logs (optional)
-    print(f"Extracted {len(text)} chars from {file.filename}")
-    print(json.dumps(statement, indent=2, ensure_ascii=False))
+    print(f"Starting processing for {file.filename}")
     
-    # Upload to Databricks if available
-    if DATABRICKS_AVAILABLE:
-        try:
-            upload_statement_to_databricks(statement, "1")
-        except Exception as e:
-            print(f"Databricks upload failed: {e}")
-
-    return {
-        "filename": file.filename,
-        "content_preview": text[:500],  # don't blast full text back if large
-        "statement": statement          # ✅ clean JSON object
-    }
+    try:
+        print("Starting PDF extraction...")
+        res, text = extract_data(data)
+        print(f"PDF extraction complete, extracted {len(text)} chars")
+        
+        print("Starting JSON parsing...")
+        statement = parse_model_json(res)
+        print("JSON parsing complete")
+        
+        # Step 1: Upload to SQLite database first (easier approach we agreed on)
+        database_success = False
+        statement_id = None
+        
+        if SQLITE_AVAILABLE:
+            print("💾 Starting SQLite database upload...")
+            try:
+                from sqlite_db import init_database
+                init_database()  # Ensure database is initialized
+                statement_id = upload_statement_to_sqlite(statement, "user_1")
+                print(f"✅ SQLite upload complete - Statement ID: {statement_id}")
+                database_success = True
+            except Exception as e:
+                print(f"❌ SQLite upload failed: {e}")
+                print("📋 Continuing without database storage...")
+        else:
+            print("📋 Skipping SQLite upload - SQLite module not available")
+        
+        # Step 2: Optionally sync to Databricks later (via separate endpoint)
+        # This keeps the upload flow simple and reliable
+        
+        return {
+            "filename": file.filename,
+            "content_preview": text[:500],
+            "statement": statement,
+            "status": "completed",
+            "database_uploaded": database_success,
+            "database_type": "SQLite",
+            "statement_id": statement_id
+        }
+        
+    except Exception as e:
+        print(f"Upload processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 # Enhanced upload endpoint (from feature branch) - requires auth if available
 if AUTH_AVAILABLE and DB_AVAILABLE:
@@ -357,7 +401,7 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
         if user and user.get("sub"):
             monthly_credit_card = get_user_credit_card_spending(user["sub"])
             if monthly_credit_card > 0:
-                data_source_info = "From uploaded statements"
+                data_source_info = "Calculated from exact transactions"
         
         # If no data found and no manual input, use a reasonable default
         if monthly_credit_card == 0:
@@ -540,20 +584,47 @@ if AUTH_AVAILABLE:
     async def analyze_house_buying_with_auth(request: HouseAnalysisRequest, user=Depends(auth_required)):
         return await analyze_house_buying(request, user)
 
-@app.get("/api/v1/dashboard/")
+@app.get("/api/v1/dashboard")
 def get_dashboard(user=None):
-    """Dashboard endpoint - auth optional"""
-    if AUTH_AVAILABLE and user is None:
-        # If auth is available but user is None, require auth
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    user_id = user["sub"] if user else "demo_user"
-    return {"message": "Dashboard endpoint", "user_id": user_id}
+    """Dashboard endpoint - returns actual dashboard data from SQLite"""
+    try:
+        # Get dashboard data from SQLite
+        if SQLITE_AVAILABLE:
+            print("📊 Fetching dashboard data from SQLite database")
+            from sqlite_db import get_dashboard_data
+            data = get_dashboard_data()
+            print(f"✅ Dashboard data fetched successfully: {len(data.get('recent_transactions', []))} recent transactions")
+            return data
+        else:
+            print("⚠️ SQLite not available, returning mock data")
+            # Return mock data if SQLite not available
+            return {
+                "total_spent": 2847.32,
+                "total_credits": 3200.00,
+                "total_transactions": 45,
+                "avg_transaction": 63.27,
+                "spending_by_category": [
+                    {"category": "Groceries", "total_amount": 892.45, "transaction_count": 12, "icon": "ShoppingCart", "color": "bg-green-500"},
+                    {"category": "Dining", "total_amount": 654.23, "transaction_count": 8, "icon": "Coffee", "color": "bg-red-500"},
+                    {"category": "Transportation", "total_amount": 445.67, "transaction_count": 6, "icon": "Car", "color": "bg-blue-500"}
+                ],
+                "recent_transactions": [
+                    {"date": "2024-01-15", "description": "Sobeys Grocery Store", "amount": -89.45, "location": "Toronto, ON"},
+                    {"date": "2024-01-14", "description": "McDonald's", "amount": -12.67, "location": "Waterloo, ON"}
+                ],
+                "monthly_trend": [
+                    {"date": "2024-01-01", "spending": 2847.32, "transactions": 45}
+                ]
+            }
+    except Exception as e:
+        print(f"❌ Dashboard error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Dashboard failed: {str(e)}")
 
-# Apply auth if available
+# Apply auth if available - redefine with auth
 if AUTH_AVAILABLE:
-    @app.get("/api/v1/dashboard/")
+    @app.get("/api/v1/dashboard")
     def get_dashboard_with_auth(user=Depends(auth_required)):
+        """Dashboard endpoint with authentication"""
         return get_dashboard(user)
 
 if __name__ == "__main__":

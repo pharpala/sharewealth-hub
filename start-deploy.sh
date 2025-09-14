@@ -30,12 +30,20 @@ python3 api/sqlite_db.py
 print_success "Database initialized"
 
 # Start backend server in background
-print_status "Starting backend server..."
+print_status "Starting backend server on port 8000..."
 python3 api/main.py &
 BACKEND_PID=$!
 
-# Wait a moment for backend to start
-sleep 3
+# Wait for backend to be ready
+print_status "Waiting for backend to be ready..."
+for i in {1..30}; do
+    if curl -s http://localhost:8000/test-database > /dev/null 2>&1; then
+        print_success "Backend server is ready"
+        break
+    fi
+    sleep 1
+    echo -n "."
+done
 
 # Start frontend server
 print_status "Starting frontend server..."

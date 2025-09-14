@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModefrom typing import Optional
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
 from DataExtractor.DataExtractor import extract_data
 import json
@@ -49,12 +50,19 @@ except ImportError:
     print("⚠️ SQLite module not available")
     SQLITE_AVAILABLE = False
 
+try:
+    from databricks import sql as databricks_sql
+    DATABRICKS_SQL_AVAILABLE = True
+except ImportError:
+    print("⚠️ Databricks SQL module not available")
+    DATABRICKS_SQL_AVAILABLE = False
+
 # Pydantic models
 class HouseAnalysisRequest(BaseModel):
     monthly_income: float
     monthly_rent: float
-    monthly_credit_card: float
     risk_tolerance: str
+    user_id: Optional[str] = None  # Optional user ID to fetch credit card data
 
 app = FastAPI()
 
@@ -88,6 +96,73 @@ def ensure_rbc_authenticated():
     else:
         print("RBC API credentials not available")
         return False
+
+def get_user_credit_card_spending(user_id: str) -> float:
+    """Get user's monthly credit card spending from Databricks or SQLite"""
+    
+    # Try Databricks first
+    if DATABRICKS_SQL_AVAILABLE:
+        try:
+            # Databricks configuration
+            DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "dbc-4583e2a1-3d51.cloud.databricks.com")
+            DATABRICKS_HTTP_PATH = os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/24e8ffcb0690a53c")
+            DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN", "REPLACE_ME")
+            DATABRICKS_SCHEMA = os.getenv("DATABRICKS_SCHEMA", "finance")
+            
+            with databricks_sql.connect(
+                server_hostname=DATABRICKS_HOST,
+                http_path=DATABRICKS_HTTP_PATH,
+                access_token=DATABRICKS_TOKEN
+            ) as conn:
+                cur = conn.cursor()
+                
+                # Get the most recent statement's purchases (monthly credit card spending)
+                cur.execute(f"""
+                SELECT purchases
+                FROM `{DATABRICKS_SCHEMA}`.`statements`
+                WHERE user_id = ? AND purchases IS NOT NULL
+                ORDER BY statement_date DESC, inserted_at DESC
+                LIMIT 1
+                """, (user_id,))
+                
+                result = cur.fetchone()
+                if result and result[0]:
+                    monthly_spending = float(result[0])
+                    print(f"✅ Found credit card spending from Databricks: ${monthly_spending}")
+                    return monthly_spending
+                    
+        except Exception as e:
+            print(f"❌ Databricks query failed: {e}")
+    
+    # Fallback to SQLite
+    if SQLITE_AVAILABLE:
+        try:
+            from sqlite_db import get_db_connection
+            
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get the most recent statement's purchases
+                cursor.execute("""
+                SELECT purchases
+                FROM statements
+                WHERE user_id = ? AND purchases IS NOT NULL
+                ORDER BY statement_date DESC, inserted_at DESC
+                LIMIT 1
+                """, (user_id,))
+                
+                result = cursor.fetchone()
+                if result and result[0]:
+                    monthly_spending = float(result[0])
+                    print(f"✅ Found credit card spending from SQLite: ${monthly_spending}")
+                    return monthly_spending
+                    
+        except Exception as e:
+            print(f"❌ SQLite query failed: {e}")
+    
+    # If no data found, return 0 and let user input manually
+    print(f"⚠️ No credit card spending data found for user {user_id}")
+    return 0.0
 
 def _strip_code_fences(s: str) -> str:
     s = s.strip()
@@ -275,6 +350,21 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
         user = {"sub": "demo_user", "email": "demo@example.com"}
     
     try:
+        # Get credit card spending from Databricks/SQLite if user_id provided
+        monthly_credit_card = 0.0
+        data_source_info = "Manual input"
+        
+        if user and user.get("sub"):
+            monthly_credit_card = get_user_credit_card_spending(user["sub"])
+            if monthly_credit_card > 0:
+                data_source_info = "From uploaded statements"
+        
+        # If no data found and no manual input, use a reasonable default
+        if monthly_credit_card == 0:
+            # Use 15% of income as default credit card spending estimate
+            monthly_credit_card = request.monthly_income * 0.15
+            data_source_info = "Estimated (15% of income)"
+        
         # Map risk tolerance to portfolio types and expected returns
         risk_to_portfolio = {
             "very-aggressive": {"type": "aggressive_growth", "annual_return": 0.12},
@@ -289,7 +379,7 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
         expected_annual_return = portfolio_info["annual_return"]
         
         # Calculate basic financial metrics
-        disposable_income = request.monthly_income - request.monthly_rent - request.monthly_credit_card
+        disposable_income = request.monthly_income - request.monthly_rent - monthly_credit_card
         
         # Use all disposable income as savings/investment
         # Assumes user has already accounted for all other expenses in their rent/housing costs
@@ -422,7 +512,8 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
         return {
             "monthly_income": request.monthly_income,
             "monthly_rent": request.monthly_rent,
-            "monthly_credit_card": request.monthly_credit_card,
+            "monthly_credit_card": monthly_credit_card,
+            "credit_card_data_source": data_source_info,
             "disposable_income": disposable_income,
             "monthly_savings": monthly_savings,
             "investment_period_years": 5,

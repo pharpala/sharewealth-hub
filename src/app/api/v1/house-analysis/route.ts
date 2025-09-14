@@ -11,10 +11,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate required fields
-    const { monthly_income, monthly_rent, monthly_credit_card, risk_tolerance } = body;
-    if (!monthly_income || !monthly_rent || monthly_credit_card === undefined || !risk_tolerance) {
+    const { monthly_income, monthly_rent, risk_tolerance } = body;
+    if (!monthly_income || !monthly_rent || !risk_tolerance) {
       return NextResponse.json(
-        { error: 'Missing required fields: monthly_income, monthly_rent, monthly_credit_card, risk_tolerance' },
+        { error: 'Missing required fields: monthly_income, monthly_rent, risk_tolerance' },
         { status: 400 }
       );
     }
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         monthly_income: parseFloat(monthly_income),
         monthly_rent: parseFloat(monthly_rent),
-        monthly_credit_card: parseFloat(monthly_credit_card),
         risk_tolerance: risk_tolerance
       }),
     });

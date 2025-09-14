@@ -244,13 +244,6 @@ export default function PlanningPage() {
             </p>
           </div>
         </Card>
-
-        {/* Below-fold optional guidance */}
-        <div className="max-w-4xl text-center text-sm text-white/50">
-          <p>
-            After confirming, we can estimate contributions per month and recommend a plan to reach your target on time.
-          </p>
-        </div>
       </main>
     </div>
   );

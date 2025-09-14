@@ -1,80 +1,100 @@
-from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
-from api.auth import auth_required
-from datetime import datetime
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from DataExtractor.DataExtractor import extract_data
-from db.main import Database, UserRepository, StatementRepository
+from dbxLoader import upload_statement_to_databricks
+import json
+import re
+
 app = FastAPI()
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+MAX_BYTES = 2 * 1024 * 1024  # 2 MB demo cap
 
-@app.get("/api/v1/me")
-def get_me(user=Depends(auth_required)):
-    return {"id": user["sub"], "email": user.get("email")}
+from fastapi.middleware.cors import CORSMiddleware
 
-@app.post("/api/v1/statements/upload")
-async def upload_statements(file: UploadFile = File(...), user=Depends(auth_required)):
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Invalid file type")
-    upload_time = datetime.now()
-    pdf = await file.read()
-    enriched, extracted = extract_data(pdf)
-    
-    # Create database session and repositories
-    db = Database()
-    user_repo = UserRepository(db)
-    statement_repo = StatementRepository(db)
-    
-    # Ensure user exists in database
-    user_repo.get_or_create(
-        auth0_id=user["sub"],
-        email=user.get("email", ""),
-        name=user.get("name", "")
-    )
-    
-    # Create statement
-    statement = statement_repo.create(user["sub"], upload_time, extracted, enriched)
-    
-    # Extract statement ID before closing session
-    statement_id = statement.id
-    
-    db.close()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def _strip_code_fences(s: str) -> str:
+    s = s.strip()
+    # remove ```json ... ``` or ``` ... ``` fences if the model added them
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json)?\s*", "", s)
+        s = re.sub(r"\s*```$", "", s)
+    return s
+
+def parse_model_json(res) -> dict:
+    """
+    Extract JSON payload from a Chat Completions–style response like the one you printed.
+    Falls back to common shapes if the SDK returns a different structure.
+    """
+    # 1) Try classic chat.completions shape
+    try:
+        content = res["choices"][0]["message"]["content"]
+    except Exception:
+        # 2) Some SDKs expose helper properties or 'output_text'
+        content = getattr(res, "output_text", None)
+        if content is None:
+            # 3) Last resort: stringify and try to pull the biggest {...} block
+            content = json.dumps(res)
+
+    if isinstance(content, list):
+        # Some SDKs may return a list of content parts
+        # Join only the text parts
+        content = "".join(part.get("text", "") if isinstance(part, dict) else str(part)
+                          for part in content)
+
+    content = _strip_code_fences(str(content))
+    # Now parse to Python dict
+    return json.loads(content)
+
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    data = await file.read()
+    if len(data) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large for demo endpoint")
+
+    res, text = extract_data(data)
+
+    # Convert model string → dict
+    try:
+        statement = parse_model_json(res)
+    except Exception as e:
+        # Helpful diagnostics if parsing fails
+        raise HTTPException(status_code=500, detail=f"Failed to parse model JSON: {e}")
+
+    # Pretty-print to logs (optional)
+    print(f"Extracted {len(text)} chars from {file.filename}")
+    print(json.dumps(statement, indent=2, ensure_ascii=False))
+    upload_statement_to_databricks(statement, "1")
+
     return {
-        "statement_id": statement_id,
-        "status": "uploaded",
-        "datetime_uploaded": upload_time.isoformat(),
-        "summary": enriched.get("summary") if isinstance(enriched, dict) else None
+        "filename": file.filename,
+        "content_preview": text[:500],  # don’t blast full text back if large
+        "statement": statement          # ✅ clean JSON object
     }
 
-@app.get("/api/v1/statements/list")
-def list_statements(user=Depends(auth_required)):
-    db = Database()
-    statement_repo = StatementRepository(db)
-    statements = statement_repo.list_by_user(user["sub"])
-    db.close()
-    return [
-        {
-            "id": s.id,
-            "status": s.status,
-            "uploaded_at": s.uploaded_at.isoformat(),
-            "summary": s.enriched_data.get("summary") if isinstance(s.enriched_data, dict) else None
-        }
-        for s in statements
-    ]
 
-@app.get("/api/v1/statements/{id}")
-def get_statement(id: str, user=Depends(auth_required)):
-    db = Database()
-    statement_repo = StatementRepository(db)
-    statement = statement_repo.get_by_id(user["sub"], id)
-    db.close()
-    if not statement:
-        raise HTTPException(status_code=404, detail="Statement not found")
-    return {
-        "id": statement.id,
-        "status": statement.status,
-        "uploaded_at": statement.uploaded_at.isoformat(),
-        "text_extracted": statement.text_extracted,
-        "enriched_data": statement.enriched_data
-    }
+if __name__ == "__main__":
+    # Run: python main.py
+    # Tip: set HOST/PORT/RELOAD env vars as needed
+    import os
+    import uvicorn
+
+    host = os.getenv("HOST", "127.0.0.1")     # use "0.0.0.0" inside Docker/VM
+    port = int(os.getenv("PORT", "8000"))
+    reload = os.getenv("RELOAD", "1") == "1"  # turn off in prod
+
+    # For reload=True, pass an import string ("module:app") so Uvicorn can re-import.
+    # If this file is main.py at the project root, "main:app" works.
+    app_ref = "main:app" if reload else app
+
+    uvicorn.run(app_ref, host=host, port=port, reload=reload)

@@ -11,28 +11,28 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate required fields
-    const { monthly_income, monthly_rent, risk_tolerance } = body;
-    if (!monthly_income || !monthly_rent || !risk_tolerance) {
+    const { location, downpayment, leverage } = body;
+    if (!location || !downpayment) {
       return NextResponse.json(
-        { error: 'Missing required fields: monthly_income, monthly_rent, risk_tolerance' },
+        { error: 'Missing required fields: location, downpayment' },
         { status: 400 }
       );
     }
 
-    // Forward request to FastAPI backend with validated data
-    const response = await fetch(`${BACKEND_URL}/api/v1/house-analysis`, {
+    // Forward request to FastAPI backend
+    const response = await fetch(`${BACKEND_URL}/api/v1/house-search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(authorization && { 'Authorization': authorization }),
       },
       body: JSON.stringify({
-        monthly_income: parseFloat(monthly_income),
-        monthly_rent: parseFloat(monthly_rent),
-        risk_tolerance: risk_tolerance
+        location: location,
+        downpayment: parseFloat(downpayment),
+        leverage: leverage || 5
       }),
-      // Increase timeout for RBC API calls
-      signal: AbortSignal.timeout(60000), // 60 second timeout
+      // Increase timeout for Zillow API calls
+      signal: AbortSignal.timeout(120000), // 2 minute timeout for house search
     });
 
     if (!response.ok) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
 
   } catch (error) {
-    console.error('House analysis API error:', error);
+    console.error('House search API error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

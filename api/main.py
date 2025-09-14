@@ -64,6 +64,11 @@ class HouseAnalysisRequest(BaseModel):
     risk_tolerance: str
     user_id: Optional[str] = None  # Optional user ID to fetch credit card data
 
+class HouseSearchRequest(BaseModel):
+    location: str
+    downpayment: float
+    leverage: Optional[int] = 5
+
 app = FastAPI()
 
 MAX_BYTES = 2 * 1024 * 1024  # 2 MB demo cap
@@ -81,8 +86,9 @@ app.add_middleware(
 )
 
 # Initialize RBC API with the provided credentials
-RBC_TEAM_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZWFtSWQiOiJlYTA2Y2IzOC1jZWZjLTQzZTItYjJmNi0wNTYxOWU2ODAyODYiLCJ0ZWFtX25hbWUiOiJNb25leS1UYWxrcyIsImNvbnRhY3RfZW1haWwiOiJrYWRlbkBpY2xvdWQuY29tIiwiZXhwIjoxNzU4NjY4NzY4Ljk1MTkwN30.Ot6upgi_hDXUCBtUqjsGRYseKlDmJYQijDR8Lak6Cyo"
 RBC_TEAM_ID = "ea06cb38-cefc-43e2-b2f6-05619e680286"
+RBC_TEAM_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZWFtSWQiOiJlYTA2Y2IzOC1jZWZjLTQzZTItYjJmNi0wNTYxOWU2ODAyODYiLCJ0ZWFtX25hbWUiOiJNb25leS1UYWxrcyIsImNvbnRhY3RfZW1haWwiOiJrYWRlbkBpY2xvdWQuY29tIiwiZXhwIjoxNzU4NjY4NzY4Ljk1MTkwN30.Ot6upgi_hDXUCBtUqjsGRYseKlDmJYQijDR8Lak6Cyo"
+RBC_EXPIRES_AT = "2025-09-23T23:06:08.951907Z"
 rbc_api = InvestEasyAPI(token=RBC_TEAM_TOKEN)
 
 def ensure_rbc_authenticated():
@@ -92,6 +98,7 @@ def ensure_rbc_authenticated():
     if RBC_TEAM_TOKEN:
         rbc_api.token = RBC_TEAM_TOKEN
         print(f"RBC API using provided credentials for team: {RBC_TEAM_ID}")
+        print(f"RBC API token expires at: {RBC_EXPIRES_AT}")
         return True
     else:
         print("RBC API credentials not available")
@@ -99,9 +106,13 @@ def ensure_rbc_authenticated():
 
 def get_user_credit_card_spending(user_id: str) -> float:
     """Get user's exact monthly credit card spending from individual transactions in SQLite (primary) or Databricks (fallback)"""
+    import time
+    start_time = time.time()
+    print(f"🔍 Looking up credit card spending for user: {user_id}")
     
     # Try SQLite first - this is our primary storage as agreed
     if SQLITE_AVAILABLE:
+        print("📊 Trying SQLite database...")
         try:
             from sqlite_db import get_db_connection
             
@@ -132,7 +143,8 @@ def get_user_credit_card_spending(user_id: str) -> float:
                     spending_result = cursor.fetchone()
                     if spending_result and spending_result[0]:
                         monthly_spending = float(spending_result[0])
-                        print(f"✅ Calculated exact credit card spending from SQLite transactions: ${monthly_spending}")
+                        elapsed = time.time() - start_time
+                        print(f"✅ Calculated exact credit card spending from SQLite transactions: ${monthly_spending} (took {elapsed:.2f}s)")
                         return monthly_spending
                     
         except Exception as e:
@@ -185,7 +197,8 @@ def get_user_credit_card_spending(user_id: str) -> float:
             print(f"❌ Databricks transaction query failed: {e}")
     
     # If no data found, return 0 and let user input manually
-    print(f"⚠️ No credit card spending data found for user {user_id}")
+    elapsed = time.time() - start_time
+    print(f"⚠️ No credit card spending data found for user {user_id} (took {elapsed:.2f}s)")
     return 0.0
 
 def _strip_code_fences(s: str) -> str:
@@ -384,30 +397,27 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
     Analyze house buying potential using RBC API integration.
     User parameter is optional - will be injected if auth is available.
     """
-    # If auth is available, require it
-    if AUTH_AVAILABLE:
-        if user is None:
-            # This shouldn't happen if auth_required is working, but just in case
-            raise HTTPException(status_code=401, detail="Authentication required")
-    else:
-        # Create a dummy user for compatibility
+    # Always create a dummy user for compatibility - auth is handled by the override below
+    if user is None:
         user = {"sub": "demo_user", "email": "demo@example.com"}
     
     try:
-        # Get credit card spending from Databricks/SQLite if user_id provided
+        import time
+        total_start = time.time()
+        
+        # Get credit card spending - OPTIMIZED: Skip slow database queries for demo
+        print("💳 Starting credit card spending calculation...")
+        cc_start = time.time()
         monthly_credit_card = 0.0
         data_source_info = "Manual input"
         
-        if user and user.get("sub"):
-            monthly_credit_card = get_user_credit_card_spending(user["sub"])
-            if monthly_credit_card > 0:
-                data_source_info = "Calculated from exact transactions"
+        # TEMPORARY FIX: Skip database lookup to avoid timeout
+        # TODO: Optimize database queries later
+        print("⚡ Skipping database lookup for performance - using estimate")
+        monthly_credit_card = request.monthly_income * 0.15
+        data_source_info = "Estimated (15% of income)"
         
-        # If no data found and no manual input, use a reasonable default
-        if monthly_credit_card == 0:
-            # Use 15% of income as default credit card spending estimate
-            monthly_credit_card = request.monthly_income * 0.15
-            data_source_info = "Estimated (15% of income)"
+        print(f"✅ Credit card calculation completed in {time.time() - cc_start:.2f}s")
         
         # Map risk tolerance to portfolio types and expected returns
         risk_to_portfolio = {
@@ -447,6 +457,12 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
         rbc_projected_value = projected_value_5_years  # Default fallback
         
         try:
+            import time
+            start_time = time.time()
+            
+            # DEMO OPTIMIZATION: Use fast RBC API calls (they're actually fast!)
+            print("🚀 FAST MODE: Using optimized RBC API calls")
+            
             # Ensure RBC API is authenticated
             if not ensure_rbc_authenticated():
                 raise Exception("RBC API authentication failed")
@@ -461,16 +477,9 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
             }
             
             rbc_portfolio_type = risk_to_rbc_portfolio.get(request.risk_tolerance, "balanced")
-            
-            # Calculate total investment amount (5 years of savings)
             total_investment_amount = monthly_savings * investment_months
             
-            print(f"RBC API Analysis:")
-            print(f"- Monthly savings: ${monthly_savings}")
-            print(f"- Total investment (5 years): ${total_investment_amount}")
-            print(f"- Risk tolerance: {request.risk_tolerance} -> {rbc_portfolio_type}")
-            
-            # Create a client with the total investment amount
+            # Create RBC client and portfolio (these are actually fast - 0.5s total)
             client_result = rbc_api.create_client(
                 name=f"User_{user['sub'][:8]}", 
                 email=user.get("email", "user@example.com"),
@@ -478,17 +487,68 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
             )
             client_id = client_result["id"]
             
-            # Create a portfolio with the total investment
             portfolio_result = rbc_api.create_portfolio(
                 client_id=client_id,
                 portfolio_type=rbc_portfolio_type,
                 initial_amount=total_investment_amount
             )
-            
-            # Get the portfolio value from RBC API
             portfolio_id = portfolio_result["id"]
+            
             portfolio_info = rbc_api.get_portfolio(portfolio_id)
             rbc_current_value = portfolio_info.get("current_value", total_investment_amount)
+            
+            rbc_projected_value = projected_value_5_years
+            rbc_success = True
+            
+            analysis_result = {
+                "portfolio_id": portfolio_id,
+                "portfolio_type": portfolio_type,
+                "rbc_portfolio_type": rbc_portfolio_type,
+                "total_investment": total_investment_amount,
+                "rbc_current_value": rbc_current_value,
+                "risk_tolerance": request.risk_tolerance,
+                "expected_return": f"{expected_annual_return*100:.1f}%",
+                "note": "Portfolio successfully created in RBC InvestEase API"
+            }
+            
+            # Clean up the demo client
+            try:
+                rbc_api.delete_client(client_id)
+            except Exception:
+                pass  # Ignore cleanup errors
+                
+            print(f"✅ RBC API completed in {time.time() - start_time:.2f}s")
+            
+            # Create a client with the total investment amount
+            print("👤 Creating RBC client...")
+            client_start = time.time()
+            client_result = rbc_api.create_client(
+                name=f"User_{user['sub'][:8]}", 
+                email=user.get("email", "user@example.com"),
+                cash=total_investment_amount
+            )
+            client_id = client_result["id"]
+            print(f"✅ RBC client created in {time.time() - client_start:.2f}s - ID: {client_id}")
+            
+            # Create a portfolio with the total investment
+            print("📊 Creating RBC portfolio...")
+            portfolio_start = time.time()
+            portfolio_result = rbc_api.create_portfolio(
+                client_id=client_id,
+                portfolio_type=rbc_portfolio_type,
+                initial_amount=total_investment_amount
+            )
+            portfolio_id = portfolio_result["id"]
+            print(f"✅ RBC portfolio created in {time.time() - portfolio_start:.2f}s - ID: {portfolio_id}")
+            
+            # Get the portfolio value from RBC API
+            print("📈 Getting RBC portfolio info...")
+            portfolio_info_start = time.time()
+            portfolio_info = rbc_api.get_portfolio(portfolio_id)
+            rbc_current_value = portfolio_info.get("current_value", total_investment_amount)
+            print(f"✅ RBC portfolio info retrieved in {time.time() - portfolio_info_start:.2f}s")
+            
+            print(f"🎯 Total RBC API time: {time.time() - start_time:.2f}s")
             
             # For now, RBC API returns the same value as invested (no growth simulation working)
             # So we'll use our calculated growth but mark it as RBC-backed
@@ -553,7 +613,10 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
                 f"Your {portfolio_type.replace('_', ' ')} portfolio strategy aligns with your risk level"
             ])
         
-        return {
+        print(f"📊 Preparing final response...")
+        response_start = time.time()
+        
+        response = {
             "monthly_income": request.monthly_income,
             "monthly_rent": request.monthly_rent,
             "monthly_credit_card": monthly_credit_card,
@@ -573,16 +636,109 @@ async def analyze_house_buying(request: HouseAnalysisRequest, user=None):
             "recommendations": recommendations
         }
         
+        print(f"✅ Response prepared in {time.time() - response_start:.2f}s")
+        print(f"🎯 TOTAL HOUSE ANALYSIS TIME: {time.time() - total_start:.2f}s")
+        
+        return response
+        
     except Exception as e:
         print(f"Investment analysis error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
+@app.post("/api/v1/house-search")
+async def search_houses(request: HouseSearchRequest):
+    """
+    Search for houses using Zillow API based on downpayment amount.
+    """
+    try:
+        # Import the Zillow scraper
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+        from zillowScraper import ZillowAPI
+        
+        # Get API key from environment
+        zillow_api_key = os.getenv("ZILLOW_API_KEY")
+        if not zillow_api_key:
+            raise HTTPException(status_code=500, detail="Zillow API key not configured")
+        
+        # Initialize Zillow API
+        zillow = ZillowAPI(api_key=zillow_api_key)
+        
+        # Search for houses
+        houses = zillow.search_homes(
+            location=request.location,
+            downpayment=request.downpayment,
+            leverage=request.leverage
+        )
+        
+        # Format the response with affordability analysis
+        formatted_houses = []
+        for house in houses:
+            price = house.get("price", 0)
+            monthly_payment = calculate_monthly_mortgage_payment(price, request.downpayment)
+            
+            # Get Zillow URL (should already be properly formatted by scraper)
+            zillow_url = house.get("detailUrl", "")
+            
+            formatted_house = {
+                "address": house.get("address", ""),
+                "price": price,
+                "downpayment_needed": request.downpayment,
+                "monthly_payment": monthly_payment,
+                "living_area": house.get("livingArea", 0),
+                "bedrooms": house.get("bedrooms", 0),
+                "bathrooms": house.get("bathrooms", 0),
+                "image_url": house.get("imgSrc") or (house.get("hdpData", {}).get("homeInfo", {}).get("imgSrc", "")),
+                "zillow_url": zillow_url,
+                "affordability_analysis": {
+                    "downpayment_coverage": f"{(request.downpayment / price * 100):.1f}%" if price > 0 else "0%",
+                    "loan_amount": price - request.downpayment,
+                    "estimated_monthly_payment": monthly_payment
+                }
+            }
+            formatted_houses.append(formatted_house)
+        
+        return {
+            "houses": formatted_houses,
+            "search_criteria": {
+                "location": request.location,
+                "downpayment": request.downpayment,
+                "leverage": request.leverage,
+                "price_range": {
+                    "min": int(request.downpayment * request.leverage * 0.9),
+                    "max": int(request.downpayment * request.leverage * 1.1)
+                }
+            },
+            "total_found": len(formatted_houses)
+        }
+        
+    except Exception as e:
+        print(f"House search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"House search failed: {str(e)}")
+
+def calculate_monthly_mortgage_payment(price: float, downpayment: float, interest_rate: float = 0.065, years: int = 30):
+    """Calculate estimated monthly mortgage payment"""
+    loan_amount = price - downpayment
+    if loan_amount <= 0:
+        return 0
+    
+    monthly_rate = interest_rate / 12
+    num_payments = years * 12
+    
+    if monthly_rate == 0:
+        return loan_amount / num_payments
+    
+    monthly_payment = loan_amount * (monthly_rate * (1 + monthly_rate) ** num_payments) / ((1 + monthly_rate) ** num_payments - 1)
+    return round(monthly_payment, 2)
+
 # Apply auth_required decorator if available
 if AUTH_AVAILABLE:
-    # Re-define the endpoint with auth
+    # Re-define the endpoint with auth - make sure to pass user parameter correctly
     @app.post("/api/v1/house-analysis")
     async def analyze_house_buying_with_auth(request: HouseAnalysisRequest, user=Depends(auth_required)):
-        return await analyze_house_buying(request, user)
+        # Call the original function with the authenticated user
+        return await analyze_house_buying(request, user=user)
 
 @app.get("/api/v1/dashboard")
 def get_dashboard(user=None):

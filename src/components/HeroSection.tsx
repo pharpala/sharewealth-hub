@@ -200,7 +200,7 @@ const HeroSection = () => {
         <div className="pt-12 pb-8 text-center animate-fade-in">
           <Badge className="bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 px-5 py-2 text-sm font-medium">
             <Sparkles className="w-4 h-4 mr-2" />
-            No bulls**t, just numbers and a plan.
+            No BS, just numbers and a plan.
           </Badge>
         </div>
 
@@ -284,78 +284,6 @@ const HeroSection = () => {
               </p>
             )}
           </div>
-        </div>
-        {/* Interactive Upload Zone */}
-        <div className="max-w-3xl mx-auto mb-16 animate-slide-up">
-          <div className="card-neon">
-            <div
-              className={`card-neon-inner transition-all duration-500 cursor-pointer ${
-                isDragOver ? "scale-105 border-primary/50" : ""
-              }`}
-              onClick={handleBrowseClick}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <div className="text-center space-y-6 py-8">
-                <div className="relative">
-                  <div className="w-20 h-20 mx-auto bg-gradient-to-r from-primary via-electric to-secondary rounded-3xl flex items-center justify-center animate-float">
-                    <Upload className="w-10 h-10 text-white" />
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-accent rounded-full flex items-center justify-center animate-cyber-pulse">
-                    <Zap className="w-3 h-3 text-accent-foreground" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold mb-3 text-electric">
-                    Drop Your Statement Here
-                  </h3>
-                  <p className="text-muted-foreground mb-6">
-                    PDF, CSV, or image files supported • Instant AI analysis • 100% secure processing
-                  </p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    {features.map((feature, index) => {
-                      const Icon = feature.icon;
-                      return (
-                        <div key={index} className="flex items-center space-x-2 text-muted-foreground">
-                          <Icon className="w-4 h-4 text-primary" />
-                          <span>{feature.text}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-4">
-                    Click or drag a file to upload. Max {MAX_FILE_MB}MB.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Example final CTA */}
-        <div className="text-center pb-20">
-          <Card className="card-neon max-w-2xl mx-auto">
-            <div className="card-neon-inner py-12">
-              <div className="space-y-6">
-                <h3 className="text-3xl font-bold text-cyber">Ready to Transform Your Finances?</h3>
-                <p className="text-muted-foreground">
-                  Join 12,450+ users who've already discovered the power of AI-driven financial insights.
-                </p>
-                <Button
-                  variant="cyber"
-                  size="lg"
-                  className="px-12"
-                  onClick={handleBrowseClick}
-                  disabled={uploading}
-                >
-                  <Upload className="w-5 h-5 mr-2" />
-                  {uploading ? "Uploading…" : "Get Started Free"}
-
-                </Button>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
     </div>

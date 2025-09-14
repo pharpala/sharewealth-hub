@@ -45,6 +45,12 @@ export default function PlanningPage() {
   const [monthlyIncome, setMonthlyIncome] = useState("");
   const [monthlyRent, setMonthlyRent] = useState("");
   const [riskTolerance, setRiskTolerance] = useState<string>("");
+  const [location, setLocation] = useState("Waterloo, ON");
+  const [showLocationInput, setShowLocationInput] = useState(false);
+  
+  // House search results
+  const [houseResults, setHouseResults] = useState<any>(null);
+  const [isSearchingHouses, setIsSearchingHouses] = useState(false);
 
   const prettyTarget = useMemo(() => (target ? `$ ${formatCurrency(target)}` : ""), [target]);
   const prettyIncome = useMemo(() => (monthlyIncome ? `$ ${formatCurrency(monthlyIncome)}` : ""), [monthlyIncome]);
@@ -79,35 +85,103 @@ export default function PlanningPage() {
     setMonthlyIncome("");
     setMonthlyRent("");
     setRiskTolerance("");
+    setLocation("Waterloo, ON");
+    setShowLocationInput(false);
+    setHouseResults(null);
+    setIsSearchingHouses(false);
   };
 
   const callRBCAnalysis = async (income: string, rent: string, risk: string) => {
     const incomeNum = parseInt(income.replace(/[^0-9]/g, ""));
     const rentNum = parseInt(rent.replace(/[^0-9]/g, ""));
     
-    const response = await fetch("/api/v1/house-analysis", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer mock-jwt-token",
-      },
-      body: JSON.stringify({
-        monthly_income: incomeNum,
-        monthly_rent: rentNum,
-        risk_tolerance: risk,
-      }),
-    });
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+    
+    try {
+      const response = await fetch("/api/v1/house-analysis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer mock-jwt-token",
+        },
+        body: JSON.stringify({
+          monthly_income: incomeNum,
+          monthly_rent: rentNum,
+          risk_tolerance: risk,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(`Analysis failed: ${response.status}`);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Analysis timed out - RBC API is taking too long');
+      }
+      throw error;
     }
+  };
 
-    return await response.json();
+  const getActualCreditCardSpending = async () => {
+    try {
+      // Try to get actual credit card spending from dashboard API
+      const dashboardResponse = await fetch('http://127.0.0.1:8000/api/v1/dashboard');
+      if (dashboardResponse.ok) {
+        const dashboardData = await dashboardResponse.json();
+        // Calculate actual monthly credit card spending from total_spent
+        // This matches the same calculation used in the backend
+        if (dashboardData.total_spent && dashboardData.total_spent > 0) {
+          return Math.abs(dashboardData.total_spent);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to get actual credit card spending:", error);
+    }
+    return null;
+  };
+
+  const searchHouses = async (projectedValue: number, searchLocation: string) => {
+    if (!searchLocation || projectedValue <= 0) return;
+    
+    setIsSearchingHouses(true);
+    try {
+      const response = await fetch("/api/v1/house-search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer mock-jwt-token",
+        },
+        body: JSON.stringify({
+          location: searchLocation,
+          downpayment: projectedValue,
+          leverage: 5
+        }),
+      });
+
+      if (response.ok) {
+        const houseData = await response.json();
+        setHouseResults(houseData);
+      } else {
+        console.error("House search failed:", response.status);
+      }
+    } catch (error) {
+      console.error("House search error:", error);
+    } finally {
+      setIsSearchingHouses(false);
+    }
   };
 
   const handleFormSubmit = async () => {
     if (!monthlyIncome || !monthlyRent || !riskTolerance) {
-      return; // Basic validation
+      return; // Basic validation (location is always set)
     }
 
     setShowForm(false); // Close modal
@@ -118,32 +192,64 @@ export default function PlanningPage() {
       const results = await callRBCAnalysis(monthlyIncome, monthlyRent, riskTolerance);
       setAnalysisResults(results);
       setAnalysisComplete(true);
+      
+      // Search for houses if location is provided
+      if (location && results.projected_value_5_years) {
+        await searchHouses(results.projected_value_5_years, location);
+      }
     } catch (error) {
       console.error("Analysis error:", error);
-      // Fallback to basic calculation if API fails
+      
+      // Enhanced fallback - try to get actual credit card spending first
       const incomeNum = parseInt(monthlyIncome.replace(/[^0-9]/g, ""));
       const rentNum = parseInt(monthlyRent.replace(/[^0-9]/g, ""));
-      const creditCardNum = incomeNum * 0.15; // Estimate 15% of income for credit cards
+      
+      // Try to get actual credit card spending from dashboard data
+      const actualCreditCardSpending = await getActualCreditCardSpending();
+      const creditCardNum = actualCreditCardSpending || (incomeNum * 0.15); // Use actual data or 15% estimate
+      
       const disposableIncome = incomeNum - rentNum - creditCardNum;
-      const monthlySavings = disposableIncome * 0.3;
+      const monthlySavings = Math.max(0, disposableIncome * 0.3); // Ensure non-negative
       const totalContributions = monthlySavings * 60; // 5 years
+      
+      // Use more sophisticated growth calculation
+      const expectedAnnualReturn = 0.07; // 7% annual return
+      const monthlyReturn = expectedAnnualReturn / 12;
+      const projectedValue = monthlySavings * (((1 + monthlyReturn) ** 60 - 1) / monthlyReturn);
+      
       const fallbackResults = {
         monthly_income: incomeNum,
         monthly_rent: rentNum,
         monthly_credit_card: creditCardNum,
+        credit_card_data_source: actualCreditCardSpending ? "From actual transactions" : "Estimated (15% of income)",
         disposable_income: disposableIncome,
         monthly_savings: monthlySavings,
         investment_period_years: 5,
         total_contributions: totalContributions,
-        projected_value_5_years: totalContributions * 1.4, // Basic 40% growth estimate
-        investment_growth: totalContributions * 0.4,
+        projected_value_5_years: projectedValue,
+        investment_growth: projectedValue - totalContributions,
         expected_annual_return: "7.0%",
         risk_profile: riskTolerance,
         portfolio_type: "balanced",
-        recommendations: ["Analysis temporarily unavailable - showing basic estimates"]
+        rbc_api_used: false,
+        data_source: "Calculated estimates with actual spending data",
+        recommendations: [
+          actualCreditCardSpending 
+            ? "✅ Using your actual credit card spending from uploaded statements"
+            : "⚠️ Using estimated credit card spending (15% of income)",
+          "House analysis API temporarily unavailable - showing calculated estimates",
+          `With $${monthlySavings.toLocaleString()}/month savings over 5 years, you'll contribute $${totalContributions.toLocaleString()}`,
+          `Based on moderate risk tolerance (7.0% expected return)`,
+          `Your investments could grow to $${projectedValue.toLocaleString()}`
+        ]
       };
       setAnalysisResults(fallbackResults);
       setAnalysisComplete(true);
+      
+      // Search for houses with fallback results if location is provided
+      if (location && projectedValue) {
+        await searchHouses(projectedValue, location);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -385,26 +491,147 @@ export default function PlanningPage() {
                         </div>
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-4 pt-4">
-                        <Button
-                          onClick={handleBackToSelection}
-                          variant="outline"
-                          className="flex-1 border-white/20 text-white hover:bg-white/10"
-                        >
-                          Try Another Goal
-                        </Button>
-                        <Button
-                          className="flex-1 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
-                          onClick={() => {
-                            // Future: Navigate to detailed planning page
-                            console.log("Navigate to detailed planning");
-                          }}
-                        >
-                          Create Detailed Plan
-                        </Button>
-                      </div>
                     </div>
+
+                    {/* House Search Results */}
+                    {houseResults && houseResults.houses && houseResults.houses.length > 0 && (
+                      <div className="mt-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="text-center mb-6">
+                          <h3 className="text-3xl font-bold text-white mb-2">
+                            These are yours.
+                          </h3>
+                          <p className="text-white/80 text-base mb-4">
+                            ${analysisResults?.monthly_savings?.toLocaleString()}/month × 60 months = ${analysisResults?.projected_value_5_years?.toLocaleString()} down payment
+                          </p>
+                          
+                          <div className="flex items-center justify-center gap-2">
+                            {!showLocationInput ? (
+                              <button
+                                onClick={() => setShowLocationInput(true)}
+                                className="text-blue-400 hover:text-blue-300 text-sm font-medium underline transition-colors"
+                              >
+                                {location}
+                              </button>
+                            ) : (
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  placeholder="Toronto, ON"
+                                  className="h-7 text-sm bg-white/10 border-white/20 text-white placeholder:text-white/50 w-32"
+                                  value={location}
+                                  onChange={(e) => setLocation(e.target.value)}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                      setShowLocationInput(false);
+                                      // Re-search houses with new location
+                                      if (analysisResults?.projected_value_5_years) {
+                                        await searchHouses(analysisResults.projected_value_5_years, location);
+                                      }
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                                <Button
+                                  onClick={async () => {
+                                    setShowLocationInput(false);
+                                    // Re-search houses with new location
+                                    if (analysisResults?.projected_value_5_years) {
+                                      await searchHouses(analysisResults.projected_value_5_years, location);
+                                    }
+                                  }}
+                                  className="h-7 px-2 text-xs bg-blue-500 hover:bg-blue-600"
+                                >
+                                  ✓
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {houseResults.houses.map((house: any, index: number) => (
+                            <div key={index} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden hover:bg-white/10 transition-all duration-300">
+                              {/* House Image */}
+                              {house.image_url && (
+                                <div className="aspect-video bg-gray-800 relative overflow-hidden">
+                                  <img 
+                                    src={house.image_url} 
+                                    alt={house.address}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                  <div className="absolute top-2 right-2 bg-green-500/90 text-white px-2 py-1 rounded text-xs font-medium">
+                                    #{index + 1} by sq ft
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* House Details */}
+                              <div className="p-4 space-y-3">
+                                <div>
+                                  <h4 className="text-white font-semibold text-sm mb-1 line-clamp-2">
+                                    {house.address}
+                                  </h4>
+                                  <div className="flex items-center gap-4 text-xs text-white/60">
+                                    <span>{house.living_area?.toLocaleString()} sq ft</span>
+                                    <span>{house.bedrooms} bed</span>
+                                    <span>{house.bathrooms} bath</span>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-white/70 text-xs">House Price:</span>
+                                    <span className="text-white font-medium text-sm">${house.price?.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-white/70 text-xs">Your Down Payment:</span>
+                                    <span className="text-green-400 font-medium text-sm">${house.downpayment_needed?.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-white/70 text-xs">Monthly Payment:</span>
+                                    <span className="text-blue-400 font-medium text-sm">${house.monthly_payment?.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-white/70 text-xs">Down Payment %:</span>
+                                    <span className="text-purple-400 font-medium text-sm">{house.affordability_analysis?.downpayment_coverage}</span>
+                                  </div>
+                                </div>
+
+                                {house.zillow_url && (
+                                  <Button 
+                                    className="w-full h-8 text-xs bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 font-medium"
+                                    onClick={() => window.open(house.zillow_url, '_blank')}
+                                  >
+                                    View Details
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Simple Call-to-Action */}
+                        <div className="mt-6 text-center">
+                          <div className="max-w-md mx-auto bg-white/5 border border-white/20 rounded-xl p-4">
+                            <p className="text-white font-bold text-lg mb-2">
+                              ${analysisResults?.monthly_savings?.toLocaleString()}/month, discipline for 60 months.
+                            </p>
+                            <p className="text-white/70 text-sm">
+                              That's it. That's what it takes.
+                            </p>
+                          </div>
+                        </div>
+
+                        {isSearchingHouses && (
+                          <div className="text-center mt-6">
+                            <div className="animate-spin w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full mx-auto mb-2"></div>
+                            <div className="text-white/60 text-sm">Finding houses in {location}...</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : isAnalyzing ? (
                   <div className="text-center space-y-4">
@@ -437,9 +664,6 @@ export default function PlanningPage() {
               <div className="text-center mb-6">
                 <h3 className="text-xl font-bold text-white mb-2">🏠 House Analysis</h3>
                 <p className="text-sm text-white/70">Quick financial assessment</p>
-                <div className="mt-2 px-3 py-1 bg-blue-500/20 border border-blue-400/30 rounded-lg">
-                  <p className="text-xs text-blue-300">💳 Credit card spending will be calculated from your exact transaction data</p>
-                </div>
               </div>
               
               <div className="space-y-4">
@@ -561,7 +785,7 @@ export default function PlanningPage() {
                     disabled={!monthlyIncome || !monthlyRent || !riskTolerance}
                     className="flex-2 h-8 text-xs bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed"
                   >
-                    Analyze
+                    Analyze & Find Houses
                   </Button>
                 </div>
               </div>
